@@ -518,21 +518,29 @@ function refreshRates(isAuto) {
       });
     }
   }).catch(function(e) {
-    console.warn('BOT failed:', e.message, '— trying ExchangeRate-API');
+    console.warn('BOT failed:', e.message);
     if (isAuto) { showNotice('自動更新失敗，將在 5 分鐘後重試', 'warn'); return; }
-    var API_URL = 'https://v6.exchangerate-api.com/v6/3b25ca2cc8cbdb1d0e6611e3/latest/USD';
-    fetch(API_URL).then(function(res) { return res.json(); }).then(function(json) {
-      if (json.result === 'success') {
-        var usdTwd = json.conversion_rates.TWD;
-        buildFallbackData(usdTwd, usdTwd / json.conversion_rates.EUR, usdTwd / json.conversion_rates.JPY);
+    // Use localStorage cache if available; no third-party fallback
+    var cache = loadHistCache();
+    var dates = Object.keys(cache).sort();
+    if (dates.length >= 5) {
+      var latestDate = dates[dates.length - 1];
+      var latest = cache[latestDate];
+      var todayRates = {
+        USD: latest.USD || { spotBuy: 0, spotSell: 0 },
+        EUR: latest.EUR || { spotBuy: 0, spotSell: 0 },
+        JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
+      };
+      if (todayRates.USD.spotSell && todayRates.EUR.spotSell && todayRates.JPY.spotSell) {
+        buildBotData(todayRates, cache);
         render();
-        var hasCachedHist = Object.keys(loadHistCache()).length >= 5;
-        showNotice('使用 ExchangeRate-API 參考匯率（非台銀牌告價）' + (hasCachedHist ? '，走勢為歷史快取資料。' : '，尚無歷史資料。'), 'warn');
+        showNotice('無法連線台銀，目前顯示上次快取的牌告匯率（' + latestDate + '）。', 'warn');
+      } else {
+        showNotice('無法連線台灣銀行取得匯率，請稍後再試。', 'warn');
       }
-    }).catch(function() {
-      var hasCachedHist = Object.keys(loadHistCache()).length >= 5;
-      showNotice('目前使用離線參考匯率' + (hasCachedHist ? '，走勢為歷史快取資料。' : '，尚無歷史資料。'), 'warn');
-    });
+    } else {
+      showNotice('無法連線台灣銀行取得匯率，請檢查網路後重新整理。', 'warn');
+    }
   }).then(function() {
     // Schedule next refresh
     nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
