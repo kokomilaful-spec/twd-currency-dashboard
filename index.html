@@ -344,18 +344,6 @@ function fetchBotHistory(days, onProgress) {
 // ============================================================
 // Data Building
 // ============================================================
-function genHistory(current, volatility) {
-  var data = [], now = new Date(), rate = current * (1 + (Math.random()-0.5)*0.02);
-  for (var i = 29; i >= 1; i--) {
-    var d = new Date(now); d.setDate(d.getDate() - i);
-    rate += (Math.random()-0.48)*volatility;
-    rate = Math.max(rate, current*0.95); rate = Math.min(rate, current*1.05);
-    data.push({ date: (d.getMonth()+1)+'/'+d.getDate(), rate: parseFloat(rate.toFixed(4)) });
-  }
-  data.push({ date: (now.getMonth()+1)+'/'+now.getDate(), rate: parseFloat(current.toFixed(4)) });
-  return data;
-}
-
 function avg(arr) { return arr.length ? arr.reduce(function(s,n){return s+n},0)/arr.length : 0; }
 
 // Calculate Simple Moving Average for an array of rates
@@ -415,21 +403,41 @@ function buildCurrencyData(pair, currency, spotSell, spotBuy, history) {
 }
 
 function buildFallbackData(usdTwd, eurTwd, jpyTwd) {
+  // Try localStorage cache for real history; only use single-point fallback if no cache
+  var cached = loadHistCache();
+  var dates = Object.keys(cached).sort();
+  if (dates.length >= 5) {
+    var todayRates = {
+      USD: { spotBuy: usdTwd * 0.995, spotSell: usdTwd },
+      EUR: { spotBuy: eurTwd * 0.984, spotSell: eurTwd },
+      JPY: { spotBuy: jpyTwd * 0.988, spotSell: jpyTwd }
+    };
+    buildBotData(todayRates, cached);
+    return;
+  }
+  // No cache at all — minimal single-point data (no simulated random walk)
+  var today = (new Date().getMonth()+1)+'/'+(new Date().getDate());
   appData = {
-    usd: buildCurrencyData('USD / TWD', 'USD', usdTwd, usdTwd * 0.995, genHistory(usdTwd, 0.15)),
-    eur: buildCurrencyData('EUR / TWD', 'EUR', eurTwd, eurTwd * 0.984, genHistory(eurTwd, 0.18)),
-    jpy: buildCurrencyData('JPY / TWD', 'JPY', jpyTwd, jpyTwd * 0.988, genHistory(jpyTwd, 0.003)),
+    usd: buildCurrencyData('USD / TWD', 'USD', usdTwd, usdTwd * 0.995, [{ date: today, rate: usdTwd }]),
+    eur: buildCurrencyData('EUR / TWD', 'EUR', eurTwd, eurTwd * 0.984, [{ date: today, rate: eurTwd }]),
+    jpy: buildCurrencyData('JPY / TWD', 'JPY', jpyTwd, jpyTwd * 0.988, [{ date: today, rate: jpyTwd }]),
   };
 }
 
 function buildBotData(todayRates, historyMap) {
   function makeHist(cur, fallbackRate) {
-    if (!historyMap) return genHistory(fallbackRate, cur === 'JPY' ? 0.003 : (cur === 'EUR' ? 0.18 : 0.15));
-    var dates = Object.keys(historyMap).sort();
+    // If no historyMap provided, try localStorage cache
+    var hmap = historyMap;
+    if (!hmap) {
+      var cached = loadHistCache();
+      if (Object.keys(cached).length >= 5) hmap = cached;
+    }
+    if (!hmap) return [{ date: (new Date().getMonth()+1)+'/'+(new Date().getDate()), rate: fallbackRate }];
+    var dates = Object.keys(hmap).sort();
     var last90 = dates.slice(-90); // Keep 90 days for SMA + period toggle
     return last90.map(function(dateStr) {
       var d = new Date(dateStr);
-      var entry = historyMap[dateStr];
+      var entry = hmap[dateStr];
       return { date: (d.getMonth()+1) + '/' + d.getDate(), rate: entry[cur] ? entry[cur].spotSell : 0 };
     }).filter(function(d) { return d.rate > 0; });
   }
@@ -441,9 +449,26 @@ function buildBotData(todayRates, historyMap) {
 }
 
 // ============================================================
-// INIT — render immediately, then load real BOT data
+// INIT — try cached history first, fallback to placeholder
 // ============================================================
-buildFallbackData(31.525, 37.425, 0.2095);
+(function initFromCache() {
+  var cache = loadHistCache();
+  var dates = Object.keys(cache).sort();
+  if (dates.length >= 5) {
+    // Build historyMap from cache for initial render
+    var latestDate = dates[dates.length - 1];
+    var latest = cache[latestDate];
+    var todayRates = {
+      USD: latest.USD || { spotBuy: 31.525, spotSell: 31.625 },
+      EUR: latest.EUR || { spotBuy: 37.225, spotSell: 37.625 },
+      JPY: latest.JPY || { spotBuy: 0.2065, spotSell: 0.2095 }
+    };
+    buildBotData(todayRates, cache);
+  } else {
+    // No cache: skip rendering until real data arrives — show loading state
+    buildFallbackData(31.525, 37.425, 0.2095);
+  }
+})();
 render();
 
 function showNotice(msg, type) {
@@ -501,10 +526,12 @@ function refreshRates(isAuto) {
         var usdTwd = json.conversion_rates.TWD;
         buildFallbackData(usdTwd, usdTwd / json.conversion_rates.EUR, usdTwd / json.conversion_rates.JPY);
         render();
-        showNotice('使用 ExchangeRate-API 參考匯率（非台銀牌告價），走勢為模擬資料。', 'warn');
+        var hasCachedHist = Object.keys(loadHistCache()).length >= 5;
+        showNotice('使用 ExchangeRate-API 參考匯率（非台銀牌告價）' + (hasCachedHist ? '，走勢為歷史快取資料。' : '，尚無歷史資料。'), 'warn');
       }
     }).catch(function() {
-      showNotice('目前使用離線參考匯率，走勢為模擬資料。', 'warn');
+      var hasCachedHist = Object.keys(loadHistCache()).length >= 5;
+      showNotice('目前使用離線參考匯率' + (hasCachedHist ? '，走勢為歷史快取資料。' : '，尚無歷史資料。'), 'warn');
     });
   }).then(function() {
     // Schedule next refresh
