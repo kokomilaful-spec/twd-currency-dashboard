@@ -151,7 +151,7 @@
   <!-- Daily Insight -->
   <div id="insight-section" class="glass section glow-accent"></div>
 
-  <div class="footer">資料來源：ExchangeRate-API / 離線參考值 · 僅供參考，非投資建議</div>
+  <div class="footer">資料來源：台灣銀行牌告匯率 · 僅供參考，非投資建議</div>
 </div>
 
 <script>
@@ -178,6 +178,107 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// ============================================================
+// BOT Data Fetching (CORS Proxy)
+// ============================================================
+var HIST_CACHE_KEY = 'twd-hist-cache';
+var CORS_PROXIES = [
+  function(u) { return 'https://corsproxy.io/?' + encodeURIComponent(u); },
+  function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
+];
+var BOT_TODAY = 'https://rate.bot.com.tw/xrt/flcsv/0/day';
+var BOT_HIST = 'https://rate.bot.com.tw/xrt/flcsv/0/';
+
+function fetchViaProxy(url) {
+  var idx = 0;
+  function tryNext() {
+    if (idx >= CORS_PROXIES.length) return Promise.reject(new Error('proxy failed'));
+    var proxyUrl = CORS_PROXIES[idx](url);
+    idx++;
+    return fetch(proxyUrl).then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    }).then(function(text) {
+      if (!text || text.length < 50) throw new Error('empty');
+      return text;
+    }).catch(function() { return tryNext(); });
+  }
+  return tryNext();
+}
+
+function parseBotCsv(text) {
+  var lines = text.split('\n');
+  var rates = {};
+  for (var i = 1; i < lines.length; i++) {
+    var line = lines[i].trim();
+    if (!line) continue;
+    var cols = line.split(',');
+    var name = (cols[0] || '').replace(/"/g, '').trim();
+    var spotBuy = parseFloat(cols[3]);
+    var spotSell = parseFloat(cols[13]);
+    if (!spotBuy || !spotSell || isNaN(spotBuy) || isNaN(spotSell)) continue;
+    if (name.indexOf('USD') >= 0 && !rates.USD) rates.USD = { spotBuy: spotBuy, spotSell: spotSell };
+    else if (name.indexOf('EUR') >= 0 && !rates.EUR) rates.EUR = { spotBuy: spotBuy, spotSell: spotSell };
+    else if (name.indexOf('JPY') >= 0 && !rates.JPY) rates.JPY = { spotBuy: spotBuy, spotSell: spotSell };
+  }
+  return rates;
+}
+
+function tradingDays(count) {
+  var dates = [];
+  var d = new Date();
+  for (var i = 0; i < count * 3 && dates.length < count; i++) {
+    d.setDate(d.getDate() - 1);
+    var dow = d.getDay();
+    if (dow !== 0 && dow !== 6) dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function loadHistCache() {
+  try { return JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}'); } catch(e) { return {}; }
+}
+function saveHistCache(cache) {
+  try {
+    var keys = Object.keys(cache).sort().reverse().slice(0, 90);
+    var trimmed = {};
+    for (var i = 0; i < keys.length; i++) trimmed[keys[i]] = cache[keys[i]];
+    localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(trimmed));
+  } catch(e) {}
+}
+
+function fetchBotHistory(days, onProgress) {
+  var candidates = tradingDays(days * 2);
+  var cache = loadHistCache();
+  var results = {};
+  var toFetch = [];
+  for (var i = 0; i < candidates.length; i++) {
+    if (cache[candidates[i]]) results[candidates[i]] = cache[candidates[i]];
+    else toFetch.push(candidates[i]);
+  }
+  var collected = Object.keys(results).length;
+  if (collected >= days) return Promise.resolve(results);
+
+  var fetched = 0;
+  var total = toFetch.length;
+  function processBatch(si) {
+    if (si >= toFetch.length || collected >= days) return Promise.resolve();
+    var batch = toFetch.slice(si, si + 5);
+    return Promise.all(batch.map(function(date) {
+      return fetchViaProxy(BOT_HIST + date).then(function(text) {
+        var r = parseBotCsv(text);
+        if (r.USD && r.EUR && r.JPY) { results[date] = r; cache[date] = r; collected++; }
+        fetched++;
+        if (onProgress) onProgress(fetched, total, collected);
+      }).catch(function() { fetched++; if (onProgress) onProgress(fetched, total, collected); });
+    })).then(function() { return processBatch(si + 5); });
+  }
+  return processBatch(0).then(function() { saveHistCache(cache); return results; });
+}
+
+// ============================================================
+// Data Building
+// ============================================================
 function genHistory(current, volatility) {
   var data = [], now = new Date(), rate = current * (1 + (Math.random()-0.5)*0.02);
   for (var i = 29; i >= 1; i--) {
@@ -190,63 +291,101 @@ function genHistory(current, volatility) {
   return data;
 }
 
-function avg(arr) { return arr.reduce(function(s,n){return s+n},0)/arr.length; }
+function avg(arr) { return arr.length ? arr.reduce(function(s,n){return s+n},0)/arr.length : 0; }
 
 function getSignal(current, avg30) {
-  var diff = ((current-avg30)/avg30)*100;
+  var diff = avg30 ? ((current-avg30)/avg30)*100 : 0;
   if (diff < -0.3) return { label:'適合買入', cls:'buy', diff:diff };
   if (diff > 0.3) return { label:'高於均價', cls:'sell', diff:diff };
   return { label:'持平觀望', cls:'neutral', diff:diff };
 }
 
-function buildCurrencyData(pair, currency, spotSellRate, buyRatio, volatility) {
-  var spotBuy = parseFloat((spotSellRate * buyRatio).toFixed(4));
-  var hist = genHistory(spotSellRate, volatility);
-  var avgVal = avg(hist.map(function(d){return d.rate}));
+function buildCurrencyData(pair, currency, spotSell, spotBuy, history) {
+  var rates = history.map(function(d){return d.rate});
+  var avgVal = rates.length > 0 ? avg(rates) : spotSell;
   return {
     pair: pair, currency: currency,
-    spotSell: parseFloat(spotSellRate.toFixed(4)), spotBuy: spotBuy,
-    spread: parseFloat((spotSellRate - spotBuy).toFixed(4)),
+    spotSell: parseFloat(spotSell.toFixed(4)), spotBuy: parseFloat(spotBuy.toFixed(4)),
+    spread: parseFloat((spotSell - spotBuy).toFixed(4)),
     avg30d: parseFloat(avgVal.toFixed(4)),
-    min30d: parseFloat(Math.min.apply(null, hist.map(function(d){return d.rate})).toFixed(4)),
-    max30d: parseFloat(Math.max.apply(null, hist.map(function(d){return d.rate})).toFixed(4)),
-    signal: getSignal(spotSellRate, avgVal), history: hist
+    min30d: rates.length > 0 ? parseFloat(Math.min.apply(null, rates).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
+    max30d: rates.length > 0 ? parseFloat(Math.max.apply(null, rates).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
+    signal: getSignal(spotSell, avgVal), history: history
   };
 }
 
-function buildAppData(usdTwd, eurTwd, jpyTwd) {
+function buildFallbackData(usdTwd, eurTwd, jpyTwd) {
   appData = {
-    usd: buildCurrencyData('USD / TWD', 'USD', usdTwd, 0.995, 0.15),
-    eur: buildCurrencyData('EUR / TWD', 'EUR', eurTwd, 0.984, 0.18),
-    jpy: buildCurrencyData('JPY / TWD', 'JPY', jpyTwd, 0.988, 0.003),
+    usd: buildCurrencyData('USD / TWD', 'USD', usdTwd, usdTwd * 0.995, genHistory(usdTwd, 0.15)),
+    eur: buildCurrencyData('EUR / TWD', 'EUR', eurTwd, eurTwd * 0.984, genHistory(eurTwd, 0.18)),
+    jpy: buildCurrencyData('JPY / TWD', 'JPY', jpyTwd, jpyTwd * 0.988, genHistory(jpyTwd, 0.003)),
+  };
+}
+
+function buildBotData(todayRates, historyMap) {
+  function makeHist(cur, fallbackRate) {
+    if (!historyMap) return genHistory(fallbackRate, cur === 'JPY' ? 0.003 : (cur === 'EUR' ? 0.18 : 0.15));
+    var dates = Object.keys(historyMap).sort();
+    var last30 = dates.slice(-30);
+    return last30.map(function(dateStr) {
+      var d = new Date(dateStr);
+      var entry = historyMap[dateStr];
+      return { date: (d.getMonth()+1) + '/' + d.getDate(), rate: entry[cur] ? entry[cur].spotSell : 0 };
+    }).filter(function(d) { return d.rate > 0; });
+  }
+  appData = {
+    usd: buildCurrencyData('USD / TWD', 'USD', todayRates.USD.spotSell, todayRates.USD.spotBuy, makeHist('USD', todayRates.USD.spotSell)),
+    eur: buildCurrencyData('EUR / TWD', 'EUR', todayRates.EUR.spotSell, todayRates.EUR.spotBuy, makeHist('EUR', todayRates.EUR.spotSell)),
+    jpy: buildCurrencyData('JPY / TWD', 'JPY', todayRates.JPY.spotSell, todayRates.JPY.spotBuy, makeHist('JPY', todayRates.JPY.spotSell)),
   };
 }
 
 // ============================================================
-// INIT — build data immediately (no waiting), then try API
+// INIT — render immediately, then load real BOT data
 // ============================================================
-buildAppData(31.525, 37.425, 0.2095);
+buildFallbackData(31.525, 37.425, 0.2095);
 render();
 
-// Try live API in the background — if it works, re-render with real data
-var API_URL = 'https://v6.exchangerate-api.com/v6/3b25ca2cc8cbdb1d0e6611e3/latest/USD';
-try {
-  fetch(API_URL).then(function(res){ return res.json(); }).then(function(json){
-    if (json.result === 'success') {
-      var usdTwd = json.conversion_rates.TWD;
-      var eurTwd = usdTwd / json.conversion_rates.EUR;
-      var jpyTwd = usdTwd / json.conversion_rates.JPY;
-      buildAppData(usdTwd, eurTwd, jpyTwd);
-      render();
-      document.getElementById('notice').innerHTML = '';
-    }
-  }).catch(function(e){
-    console.warn('API unavailable:', e.message);
-    document.getElementById('notice').innerHTML = '<div class="notice">目前使用離線參考匯率。如需即時資料，請透過 HTTP 伺服器開啟此頁面。</div>';
-  });
-} catch(e) {
-  document.getElementById('notice').innerHTML = '<div class="notice">目前使用離線參考匯率。</div>';
+function showNotice(msg, type) {
+  var colors = {
+    info: 'background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.3);color:var(--accent)',
+    ok: 'background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:var(--buy)',
+    warn: 'background:rgba(249,115,22,0.1);border-color:rgba(249,115,22,0.3);color:var(--sell)'
+  };
+  document.getElementById('notice').innerHTML = '<div class="notice" style="' + (colors[type] || colors.info) + '">' + msg + '</div>';
 }
+
+(function loadBotData() {
+  showNotice('正在連線台灣銀行取得即時匯率...', 'info');
+  fetchViaProxy(BOT_TODAY).then(function(text) {
+    var todayRates = parseBotCsv(text);
+    if (!todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
+    buildBotData(todayRates, null);
+    render();
+    showNotice('已取得台銀即時匯率，正在載入 30 日歷史...', 'info');
+    return fetchBotHistory(30, function(fetched, total, collected) {
+      showNotice('載入歷史資料 (' + collected + '/30 天)...', 'info');
+    }).then(function(historyMap) {
+      var dayCount = Object.keys(historyMap).length;
+      if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
+      showNotice('資料來源：台灣銀行牌告匯率（' + dayCount + ' 日歷史資料）', 'ok');
+      setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
+    });
+  }).catch(function(e) {
+    console.warn('BOT failed:', e.message, '— trying ExchangeRate-API');
+    var API_URL = 'https://v6.exchangerate-api.com/v6/3b25ca2cc8cbdb1d0e6611e3/latest/USD';
+    fetch(API_URL).then(function(res) { return res.json(); }).then(function(json) {
+      if (json.result === 'success') {
+        var usdTwd = json.conversion_rates.TWD;
+        buildFallbackData(usdTwd, usdTwd / json.conversion_rates.EUR, usdTwd / json.conversion_rates.JPY);
+        render();
+        showNotice('使用 ExchangeRate-API 參考匯率（非台銀牌告價），走勢為模擬資料。', 'warn');
+      }
+    }).catch(function() {
+      showNotice('目前使用離線參考匯率，走勢為模擬資料。', 'warn');
+    });
+  });
+})();
 
 // ============================================================
 // RENDER
