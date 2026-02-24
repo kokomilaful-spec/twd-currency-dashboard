@@ -15,6 +15,8 @@
   .glass { background: var(--card); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: 1rem; }
   .grid-2 { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
   @media (min-width: 768px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+  .grid-3 { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+  @media (min-width: 768px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
   .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
   .header h1 { font-size: 1.5rem; font-weight: 700; }
   .header p { font-size: 0.875rem; color: rgba(255,255,255,0.5); }
@@ -109,9 +111,10 @@
   </div>
 
   <!-- Rate Cards -->
-  <div class="grid-2 mb">
+  <div class="grid-3 mb">
     <div id="card-usd" class="glass rate-card"></div>
     <div id="card-eur" class="glass rate-card"></div>
+    <div id="card-jpy" class="glass rate-card"></div>
   </div>
 
   <!-- Company Vault -->
@@ -121,7 +124,7 @@
   <div id="form-section" class="glass section glow-accent"></div>
 
   <!-- Charts (only if Chart.js loads) -->
-  <div id="charts-area" class="grid-2 mb hidden">
+  <div id="charts-area" class="grid-3 mb hidden">
     <div class="glass section glow-accent">
       <div class="row-between">
         <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">USD / TWD — 30 日走勢</h3>
@@ -135,6 +138,13 @@
         <span id="eur-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
       </div>
       <div class="chart-box"><canvas id="chart-eur"></canvas></div>
+    </div>
+    <div class="glass section glow-accent">
+      <div class="row-between">
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD — 30 日走勢</h3>
+        <span id="jpy-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
+      </div>
+      <div class="chart-box"><canvas id="chart-jpy"></canvas></div>
     </div>
   </div>
 
@@ -159,7 +169,7 @@ window.onerror = function(msg, src, line) {
 var STORAGE_KEY = 'twd-dashboard-exchanges';
 var appData = null;
 var exchanges = [];
-var usdChart = null, eurChart = null;
+var usdChart = null, eurChart = null, jpyChart = null;
 
 try { exchanges = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { exchanges = []; }
 function saveExchanges() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(exchanges)); } catch(e){} }
@@ -189,31 +199,33 @@ function getSignal(current, avg30) {
   return { label:'持平觀望', cls:'neutral', diff:diff };
 }
 
-function buildAppData(usdTwd, eurTwd) {
-  var usdSpotBuy = parseFloat((usdTwd * 0.995).toFixed(4));
-  var eurSpotBuy = parseFloat((eurTwd * 0.984).toFixed(4));
-  var usdHist = genHistory(usdTwd, 0.15);
-  var eurHist = genHistory(eurTwd, 0.18);
-  var usdAvg = avg(usdHist.map(function(d){return d.rate}));
-  var eurAvg = avg(eurHist.map(function(d){return d.rate}));
+function buildCurrencyData(pair, currency, spotSellRate, buyRatio, volatility) {
+  var spotBuy = parseFloat((spotSellRate * buyRatio).toFixed(4));
+  var hist = genHistory(spotSellRate, volatility);
+  var avgVal = avg(hist.map(function(d){return d.rate}));
+  return {
+    pair: pair, currency: currency,
+    spotSell: parseFloat(spotSellRate.toFixed(4)), spotBuy: spotBuy,
+    spread: parseFloat((spotSellRate - spotBuy).toFixed(4)),
+    avg30d: parseFloat(avgVal.toFixed(4)),
+    min30d: parseFloat(Math.min.apply(null, hist.map(function(d){return d.rate})).toFixed(4)),
+    max30d: parseFloat(Math.max.apply(null, hist.map(function(d){return d.rate})).toFixed(4)),
+    signal: getSignal(spotSellRate, avgVal), history: hist
+  };
+}
+
+function buildAppData(usdTwd, eurTwd, jpyTwd) {
   appData = {
-    usd: { pair:'USD / TWD', currency:'USD', spotSell:parseFloat(usdTwd.toFixed(4)), spotBuy:usdSpotBuy,
-      spread:parseFloat((usdTwd-usdSpotBuy).toFixed(4)), avg30d:parseFloat(usdAvg.toFixed(4)),
-      min30d:parseFloat(Math.min.apply(null,usdHist.map(function(d){return d.rate})).toFixed(4)),
-      max30d:parseFloat(Math.max.apply(null,usdHist.map(function(d){return d.rate})).toFixed(4)),
-      signal:getSignal(usdTwd, usdAvg), history:usdHist },
-    eur: { pair:'EUR / TWD', currency:'EUR', spotSell:parseFloat(eurTwd.toFixed(4)), spotBuy:eurSpotBuy,
-      spread:parseFloat((eurTwd-eurSpotBuy).toFixed(4)), avg30d:parseFloat(eurAvg.toFixed(4)),
-      min30d:parseFloat(Math.min.apply(null,eurHist.map(function(d){return d.rate})).toFixed(4)),
-      max30d:parseFloat(Math.max.apply(null,eurHist.map(function(d){return d.rate})).toFixed(4)),
-      signal:getSignal(eurTwd, eurAvg), history:eurHist },
+    usd: buildCurrencyData('USD / TWD', 'USD', usdTwd, 0.995, 0.15),
+    eur: buildCurrencyData('EUR / TWD', 'EUR', eurTwd, 0.984, 0.18),
+    jpy: buildCurrencyData('JPY / TWD', 'JPY', jpyTwd, 0.988, 0.003),
   };
 }
 
 // ============================================================
 // INIT — build data immediately (no waiting), then try API
 // ============================================================
-buildAppData(31.525, 37.425);
+buildAppData(31.525, 37.425, 0.2095);
 render();
 
 // Try live API in the background — if it works, re-render with real data
@@ -223,7 +235,8 @@ try {
     if (json.result === 'success') {
       var usdTwd = json.conversion_rates.TWD;
       var eurTwd = usdTwd / json.conversion_rates.EUR;
-      buildAppData(usdTwd, eurTwd);
+      var jpyTwd = usdTwd / json.conversion_rates.JPY;
+      buildAppData(usdTwd, eurTwd, jpyTwd);
       render();
       document.getElementById('notice').innerHTML = '';
     }
@@ -242,6 +255,7 @@ function render() {
   document.getElementById('updated').textContent = '更新於 ' + new Date().toLocaleString('zh-TW');
   renderCard('card-usd', appData.usd);
   renderCard('card-eur', appData.eur);
+  renderCard('card-jpy', appData.jpy);
   renderVault();
   renderForm();
   renderInsight();
@@ -292,12 +306,13 @@ function calcHoldings(currency) {
 function renderVault() {
   document.getElementById('vault-section').innerHTML =
     '<div class="section-title"><span style="font-size:1.25rem">&#127974;</span><h3>公司外匯庫存</h3><span class="sub">庫存匯率計算</span></div>' +
-    '<div class="grid-2">'+renderCurrencyVault('USD',appData.usd.spotBuy)+renderCurrencyVault('EUR',appData.eur.spotBuy)+'</div>';
+    '<div class="grid-3">'+renderCurrencyVault('USD',appData.usd.spotBuy)+renderCurrencyVault('EUR',appData.eur.spotBuy)+renderCurrencyVault('JPY',appData.jpy.spotBuy)+'</div>';
 }
 
 function renderCurrencyVault(currency, spotBuy) {
   var h = calcHoldings(currency);
-  var label = currency==='USD'?'美元 USD':'歐元 EUR';
+  var labelMap = { USD:'美元 USD', EUR:'歐元 EUR', JPY:'日幣 JPY' };
+  var label = labelMap[currency] || currency;
   if (h.txCount===0) return '<div class="vault-card"><div style="font-size:0.875rem;color:rgba(255,255,255,0.4);margin-bottom:0.75rem">'+label+'</div><p style="font-size:0.75rem;color:rgba(255,255,255,0.25)">尚無換匯紀錄，請在下方新增第一筆。</p></div>';
 
   var pnl = h.totalForeign * spotBuy - h.totalTwdSpent;
@@ -331,7 +346,7 @@ function renderForm() {
       '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10133;</span><h3>新增換匯紀錄</h3></div>'+histBtn+'</div>' +
     '<div class="form-grid">' +
       '<div><label class="form-label">日期</label><input type="date" id="f-date" class="form-input" value="'+new Date().toISOString().slice(0,10)+'"></div>' +
-      '<div><label class="form-label">幣別</label><select id="f-currency" class="form-input"><option value="USD">美元 USD</option><option value="EUR">歐元 EUR</option></select></div>' +
+      '<div><label class="form-label">幣別</label><select id="f-currency" class="form-input"><option value="USD">美元 USD</option><option value="EUR">歐元 EUR</option><option value="JPY">日幣 JPY</option></select></div>' +
       '<div><label class="form-label">金額</label><input type="number" id="f-amount" class="form-input" step="0.01" min="0" placeholder="10000" oninput="updatePreview()"></div>' +
       '<div><label class="form-label">匯率 <button class="btn-link" type="button" onclick="prefillRate()">[帶入今日]</button></label><input type="number" id="f-rate" class="form-input" step="0.0001" min="0" placeholder="31.5250" oninput="updatePreview()"></div>' +
       '<div class="form-submit" style="display:flex;align-items:flex-end"><button class="btn-accent" style="width:100%" type="button" onclick="addRecord()">+ 新增</button></div></div>' +
@@ -341,7 +356,8 @@ function renderForm() {
 
 function prefillRate() {
   var cur = document.getElementById('f-currency').value;
-  document.getElementById('f-rate').value = (cur==='USD' ? appData.usd.spotSell : appData.eur.spotSell);
+  var rateMap = { USD: appData.usd.spotSell, EUR: appData.eur.spotSell, JPY: appData.jpy.spotSell };
+  document.getElementById('f-rate').value = rateMap[cur];
   updatePreview();
 }
 
@@ -390,9 +406,10 @@ function toggleHistory() {
 
 // ---- Charts (optional — only if Chart.js CDN loaded) ----
 function renderCharts() {
-  document.getElementById('charts-area').className = 'grid-2 mb';
+  document.getElementById('charts-area').className = 'grid-3 mb';
   document.getElementById('usd-avg-label').textContent = '均價：'+appData.usd.avg30d.toFixed(4);
   document.getElementById('eur-avg-label').textContent = '均價：'+appData.eur.avg30d.toFixed(4);
+  document.getElementById('jpy-avg-label').textContent = '均價：'+appData.jpy.avg30d.toFixed(4);
 
   function makeCfg(data, avgVal, color) {
     return {
@@ -426,37 +443,38 @@ function renderCharts() {
   }
   if (usdChart) usdChart.destroy();
   if (eurChart) eurChart.destroy();
+  if (jpyChart) jpyChart.destroy();
   usdChart = new Chart(document.getElementById('chart-usd'), makeCfg(appData.usd.history, appData.usd.avg30d, '#6366f1'));
   eurChart = new Chart(document.getElementById('chart-eur'), makeCfg(appData.eur.history, appData.eur.avg30d, '#8b5cf6'));
+  jpyChart = new Chart(document.getElementById('chart-jpy'), makeCfg(appData.jpy.history, appData.jpy.avg30d, '#f43f5e'));
 }
 
 // ---- Insight ----
+function addCurrencyInsight(insights, data, nameZh) {
+  if (data.signal.diff < -0.3) {
+    insights.push({ color:'var(--buy)', text:nameZh+'即期賣出低於 30 日均價 '+Math.abs(data.signal.diff).toFixed(2)+'%，每單位可省 NT$'+(data.avg30d-data.spotSell).toFixed(3)+'，是換匯好時機。' });
+  } else if (data.signal.diff > 0.3) {
+    insights.push({ color:'var(--sell)', text:nameZh+'即期賣出高於 30 日均價 '+data.signal.diff.toFixed(2)+'%（均價 '+data.avg30d.toFixed(4)+'），建議觀望。' });
+  } else {
+    insights.push({ color:'var(--accent)', text:nameZh+'即期賣出接近 30 日均價，目前無明顯換匯優勢。' });
+  }
+}
+
 function renderInsight() {
-  var u = appData.usd, e = appData.eur;
+  var u = appData.usd, e = appData.eur, j = appData.jpy;
   var insights = [];
 
-  if (u.signal.diff < -0.3) {
-    insights.push({ color:'var(--buy)', text:'美元即期賣出低於 30 日均價 '+Math.abs(u.signal.diff).toFixed(2)+'%，每美元可省 NT$'+(u.avg30d-u.spotSell).toFixed(3)+'，是換匯好時機。' });
-  } else if (u.signal.diff > 0.3) {
-    insights.push({ color:'var(--sell)', text:'美元即期賣出高於 30 日均價 '+u.signal.diff.toFixed(2)+'%（均價 '+u.avg30d.toFixed(2)+'），建議觀望。' });
-  } else {
-    insights.push({ color:'var(--accent)', text:'美元即期賣出接近 30 日均價，目前無明顯換匯優勢。' });
-  }
+  addCurrencyInsight(insights, u, '美元');
+  addCurrencyInsight(insights, e, '歐元');
+  addCurrencyInsight(insights, j, '日幣');
 
-  if (e.signal.diff < -0.3) {
-    insights.push({ color:'var(--buy)', text:'歐元即期賣出低於均價 '+Math.abs(e.signal.diff).toFixed(2)+'%，每歐元可省 NT$'+(e.avg30d-e.spotSell).toFixed(3)+'。' });
-  } else if (e.signal.diff > 0.3) {
-    insights.push({ color:'var(--sell)', text:'歐元即期賣出高於均價 '+e.signal.diff.toFixed(2)+'%（均價 '+e.avg30d.toFixed(2)+'），不建議今日換匯。' });
-  } else {
-    insights.push({ color:'var(--accent)', text:'歐元即期賣出在均價附近盤整，無明顯訊號。' });
-  }
+  insights.push({ color:'rgba(255,255,255,0.4)', text:'今日匯差：美元 '+u.spread.toFixed(3)+' · 歐元 '+e.spread.toFixed(3)+' · 日幣 '+j.spread.toFixed(4)+'（越小代表市場越緊）' });
 
-  insights.push({ color:'rgba(255,255,255,0.4)', text:'今日匯差：美元 '+u.spread.toFixed(3)+' · 歐元 '+e.spread.toFixed(3)+'（越小代表市場越緊）' });
-
-  var buyCount = [u,e].filter(function(d){return d.signal.cls==='buy'}).length;
+  var buyCount = [u,e,j].filter(function(d){return d.signal.cls==='buy'}).length;
+  var total = 3;
   var verdict, vCls;
-  if (buyCount===2) { verdict='美元與歐元皆低於 30 日均價——今天是換匯的好日子！'; vCls='verdict-buy'; }
-  else if (buyCount===1) { verdict='訊號不一致——其中一種幣別較有利，請參考上方卡片。'; vCls='verdict-neutral'; }
+  if (buyCount >= 2) { verdict='多數幣別低於 30 日均價——今天是換匯的好日子！'; vCls='verdict-buy'; }
+  else if (buyCount === 1) { verdict='訊號不一致——其中一種幣別較有利，請參考上方卡片。'; vCls='verdict-neutral'; }
   else { verdict='目前無省錢機會，匯率在均價或以上，建議再等等。'; vCls='verdict-sell'; }
 
   var now = new Date();
