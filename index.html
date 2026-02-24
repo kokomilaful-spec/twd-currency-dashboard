@@ -153,7 +153,7 @@
   <!-- Daily Insight -->
   <div id="insight-section" class="glass section glow-accent"></div>
 
-  <div class="footer">資料來源：台灣銀行牌告匯率 · 僅供參考，非投資建議</div>
+  <div class="footer">資料來源：台灣銀行 + 合作金庫牌告匯率 · 僅供參考，非投資建議</div>
 </div>
 
 <script>
@@ -190,14 +190,17 @@ var CORS_PROXIES = [
 ];
 var BOT_TODAY = 'https://rate.bot.com.tw/xrt/flcsv/0/day';
 var BOT_HIST = 'https://rate.bot.com.tw/xrt/flcsv/0/';
+var TCB_URL = 'https://www.findrate.tw/bank/10/'; // 合作金庫 via findrate.tw
+var tcbRates = null; // { USD:{spotBuy,spotSell}, EUR:{…}, JPY:{…} }
 
-function fetchViaProxy(url) {
+function fetchViaProxy(url, bustCache) {
+  var fetchUrl = bustCache ? url + (url.indexOf('?')>=0?'&':'?') + '_t=' + Date.now() : url;
   var idx = 0;
   function tryNext() {
     if (idx >= CORS_PROXIES.length) return Promise.reject(new Error('proxy failed'));
-    var proxyUrl = CORS_PROXIES[idx](url);
+    var proxyUrl = CORS_PROXIES[idx](fetchUrl);
     idx++;
-    return fetch(proxyUrl).then(function(res) {
+    return fetch(proxyUrl, bustCache ? {cache:'no-store'} : {}).then(function(res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.text();
     }).then(function(text) {
@@ -224,6 +227,40 @@ function parseBotCsv(text) {
     else if (name.indexOf('JPY') >= 0 && !rates.JPY) rates.JPY = { spotBuy: spotBuy, spotSell: spotSell };
   }
   return rates;
+}
+
+function parseFindRateHtml(html) {
+  var rates = {};
+  var currencyMap = { '美金': 'USD', '歐元': 'EUR', '日幣': 'JPY', '日圓': 'JPY' };
+  // findrate.tw table: cols = [幣別, 現鈔買入, 現鈔賣出, 即期買入, 即期賣出]
+  var rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+  for (var i = 0; i < rows.length; i++) {
+    var cells = rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
+    if (!cells || cells.length < 5) continue;
+    var cellTexts = cells.map(function(c) { return c.replace(/<[^>]*>/g, '').trim(); });
+    var cur = null;
+    for (var key in currencyMap) {
+      if (cellTexts[0].indexOf(key) >= 0) { cur = currencyMap[key]; break; }
+    }
+    if (!cur || rates[cur]) continue;
+    var spotBuy = parseFloat(cellTexts[3]);
+    var spotSell = parseFloat(cellTexts[4]);
+    if (!isNaN(spotBuy) && !isNaN(spotSell) && spotBuy > 0 && spotSell > 0) {
+      rates[cur] = { spotBuy: spotBuy, spotSell: spotSell };
+    }
+  }
+  return (rates.USD && rates.EUR && rates.JPY) ? rates : null;
+}
+
+function fetchTcbRates() {
+  return fetchViaProxy(TCB_URL, true).then(function(html) {
+    var parsed = parseFindRateHtml(html);
+    if (parsed) { tcbRates = parsed; }
+    return parsed;
+  }).catch(function(e) {
+    console.warn('TCB rates failed:', e.message);
+    return null;
+  });
 }
 
 function tradingDays(count) {
@@ -358,19 +395,26 @@ function showNotice(msg, type) {
 }
 
 (function loadBotData() {
-  showNotice('正在連線台灣銀行取得即時匯率...', 'info');
-  fetchViaProxy(BOT_TODAY).then(function(text) {
+  showNotice('正在連線台灣銀行 + 合作金庫取得即時匯率...', 'info');
+  // Fetch BOT + TCB in parallel
+  Promise.all([
+    fetchViaProxy(BOT_TODAY, true),
+    fetchTcbRates()
+  ]).then(function(results) {
+    var text = results[0];
     var todayRates = parseBotCsv(text);
     if (!todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
     buildBotData(todayRates, null);
     render();
-    showNotice('已取得台銀即時匯率，正在載入 30 日歷史...', 'info');
+    var tcbStatus = tcbRates ? ' + 合作金庫' : '';
+    showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入 30 日歷史...', 'info');
     return fetchBotHistory(30, function(fetched, total, collected) {
       showNotice('載入歷史資料 (' + collected + '/30 天)...', 'info');
     }).then(function(historyMap) {
       var dayCount = Object.keys(historyMap).length;
       if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
-      showNotice('資料來源：台灣銀行牌告匯率（' + dayCount + ' 日歷史資料）', 'ok');
+      var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
+      showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日歷史資料）', 'ok');
       setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
     });
   }).catch(function(e) {
@@ -409,8 +453,8 @@ function render() {
 function renderCard(id, d) {
   var s = d.signal;
   var isJpy = d.currency === 'JPY';
-  var m = isJpy ? 100 : 1; // JPY shows per 100 units
-  var dp = isJpy ? 2 : 4;  // decimal places
+  var m = isJpy ? 100 : 1;
+  var dp = isJpy ? 2 : 4;
   var glowCls = s.cls==='buy'?'glow-green':s.cls==='sell'?'glow-orange':'glow-accent';
   var el = document.getElementById(id);
   el.className = 'glass rate-card ' + glowCls;
@@ -418,6 +462,30 @@ function renderCard(id, d) {
   var diffSign = s.diff > 0 ? '+' : '';
   var alertHtml = s.cls==='buy' ? '<div class="alert-box">省錢機會 — 低於 30 日均價 '+Math.abs(s.diff).toFixed(2)+'%</div>' : '';
   var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
+
+  // TCB comparison
+  var tcbHtml = '';
+  if (tcbRates && tcbRates[d.currency]) {
+    var tcb = tcbRates[d.currency];
+    var botSell = d.spotSell * m;
+    var tcbSell = tcb.spotSell * m;
+    var diff = tcbSell - botSell;
+    var cheaper = diff < -0.0001 ? '合庫' : diff > 0.0001 ? '台銀' : '相同';
+    var diffColor = diff < -0.0001 ? 'var(--buy)' : diff > 0.0001 ? 'var(--buy)' : 'rgba(255,255,255,0.4)';
+    tcbHtml =
+      '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.5rem;padding:0.625rem;margin-top:0.75rem">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">' +
+          '<span style="font-size:0.6875rem;color:rgba(255,255,255,0.4)">銀行比價</span>' +
+          '<span style="font-size:0.6875rem;color:'+diffColor+';font-weight:500">'+cheaper+'較便宜</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.75rem">' +
+          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">台銀賣出</span><span style="color:rgba(255,255,255,0.8);font-weight:600">'+botSell.toFixed(dp)+'</span></div>' +
+          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">合庫賣出</span><span style="color:rgba(255,255,255,0.8);font-weight:600">'+tcbSell.toFixed(dp)+'</span></div>' +
+          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">台銀買入</span><span style="color:rgba(255,255,255,0.6)">'+(d.spotBuy*m).toFixed(dp)+'</span></div>' +
+          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">合庫買入</span><span style="color:rgba(255,255,255,0.6)">'+(tcb.spotBuy*m).toFixed(dp)+'</span></div>' +
+        '</div>' +
+      '</div>';
+  }
 
   el.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
@@ -436,7 +504,8 @@ function renderCard(id, d) {
       '<div class="stat"><div class="stat-label">匯差(買賣價差)</div><div class="stat-value">'+(d.spread*m).toFixed(dp)+'</div><div class="stat-sub">即期買入 '+(d.spotBuy*m).toFixed(dp)+'</div></div>' +
       '<div class="stat"><div class="stat-label">30日最低</div><div class="stat-value">'+(d.min30d*m).toFixed(dp)+'</div></div>' +
       '<div class="stat"><div class="stat-label">30日最高</div><div class="stat-value">'+(d.max30d*m).toFixed(dp)+'</div></div>' +
-    '</div>';
+    '</div>' +
+    tcbHtml;
 }
 
 // ---- Vault ----
@@ -603,6 +672,19 @@ function addCurrencyInsight(insights, data, nameZh) {
     insights.push({ color:'var(--sell)', text:nameZh+'即期賣出高於 30 日均價 '+data.signal.diff.toFixed(2)+'%（均價 '+data.avg30d.toFixed(4)+'），建議觀望。' });
   } else {
     insights.push({ color:'var(--accent)', text:nameZh+'即期賣出接近 30 日均價，目前無明顯換匯優勢。' });
+  }
+  // Bank comparison insight
+  if (tcbRates && tcbRates[data.currency]) {
+    var botSell = data.spotSell;
+    var tcbSell = tcbRates[data.currency].spotSell;
+    var diff = tcbSell - botSell;
+    if (Math.abs(diff) > 0.0001) {
+      var cheaper = diff > 0 ? '台銀' : '合庫';
+      var isJpy = data.currency === 'JPY';
+      var savePer = Math.abs(diff);
+      var saveText = isJpy ? '每萬日圓省 NT$'+(savePer*10000).toFixed(0) : '每千元省 NT$'+(savePer*1000).toFixed(1);
+      insights.push({ color:'var(--accent)', text:nameZh+'買入：'+cheaper+'較便宜（價差 '+(isJpy?(savePer*100).toFixed(2):savePer.toFixed(4))+'，'+saveText+'）。' });
+    }
   }
 }
 
