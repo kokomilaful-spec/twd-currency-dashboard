@@ -117,7 +117,8 @@
     </div>
     <div style="display:flex;align-items:center;gap:1rem">
       <span id="updated" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
-      <button class="btn" onclick="location.reload()">重新整理</button>
+      <span id="countdown" style="font-size:0.6875rem;color:rgba(255,255,255,0.25)"></span>
+      <button class="btn" onclick="refreshRates(false)">重新整理</button>
     </div>
   </div>
 
@@ -454,9 +455,14 @@ function showNotice(msg, type) {
   document.getElementById('notice').innerHTML = '<div class="notice" style="' + (colors[type] || colors.info) + '">' + msg + '</div>';
 }
 
-(function loadBotData() {
-  showNotice('正在連線台灣銀行 + 合作金庫取得即時匯率...', 'info');
-  // Fetch BOT + TCB in parallel
+var lastHistoryMap = null; // cache history between refreshes
+var AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+var refreshTimer = null;
+var nextRefreshAt = 0;
+
+function refreshRates(isAuto) {
+  var label = isAuto ? '自動更新中...' : '正在連線台灣銀行 + 合作金庫取得即時匯率...';
+  showNotice(label, 'info');
   Promise.all([
     fetchViaProxy(BOT_TODAY, true),
     fetchTcbRates()
@@ -464,21 +470,31 @@ function showNotice(msg, type) {
     var text = results[0];
     var todayRates = parseBotCsv(text);
     if (!todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
-    buildBotData(todayRates, null);
-    render();
-    var tcbStatus = tcbRates ? ' + 合作金庫' : '';
-    showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入歷史資料...', 'info');
-    return fetchBotHistory(90, function(fetched, total, collected) {
-      showNotice('載入歷史資料 (' + collected + '/90 天)...', 'info');
-    }).then(function(historyMap) {
-      var dayCount = Object.keys(historyMap).length;
-      if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
+    if (lastHistoryMap) {
+      buildBotData(todayRates, lastHistoryMap);
+      render();
       var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
-      showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日歷史資料）', 'ok');
-      setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
-    });
+      showNotice('資料來源：' + sources + ' 牌告匯率（每 5 分鐘自動更新）', 'ok');
+      setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 3000);
+    } else {
+      buildBotData(todayRates, null);
+      render();
+      var tcbStatus = tcbRates ? ' + 合作金庫' : '';
+      showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入歷史資料...', 'info');
+      return fetchBotHistory(90, function(fetched, total, collected) {
+        showNotice('載入歷史資料 (' + collected + '/90 天)...', 'info');
+      }).then(function(historyMap) {
+        lastHistoryMap = historyMap;
+        var dayCount = Object.keys(historyMap).length;
+        if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
+        var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
+        showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日歷史 · 每 5 分鐘自動更新）', 'ok');
+        setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
+      });
+    }
   }).catch(function(e) {
     console.warn('BOT failed:', e.message, '— trying ExchangeRate-API');
+    if (isAuto) { showNotice('自動更新失敗，將在 5 分鐘後重試', 'warn'); return; }
     var API_URL = 'https://v6.exchangerate-api.com/v6/3b25ca2cc8cbdb1d0e6611e3/latest/USD';
     fetch(API_URL).then(function(res) { return res.json(); }).then(function(json) {
       if (json.result === 'success') {
@@ -490,8 +506,16 @@ function showNotice(msg, type) {
     }).catch(function() {
       showNotice('目前使用離線參考匯率，走勢為模擬資料。', 'warn');
     });
+  }).then(function() {
+    // Schedule next refresh
+    nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(function() { refreshRates(true); }, AUTO_REFRESH_MS);
   });
-})();
+}
+
+// Initial load
+refreshRates(false);
 
 // ============================================================
 // RENDER
@@ -836,6 +860,16 @@ function renderInsight() {
     insights.map(function(i){ return '<div class="insight-row"><span style="color:'+i.color+';font-size:1.125rem;flex-shrink:0;margin-top:2px">&#9679;</span><p class="insight-text">'+i.text+'</p></div>'; }).join('') +
     '<div class="verdict '+vCls+'"><p>'+verdict+'</p></div>';
 }
+
+// ---- Countdown timer for auto-refresh ----
+setInterval(function() {
+  var el = document.getElementById('countdown');
+  if (!el || !nextRefreshAt) return;
+  var secs = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
+  var m = Math.floor(secs / 60);
+  var s = secs % 60;
+  el.textContent = m + ':' + (s < 10 ? '0' : '') + s + ' 後更新';
+}, 1000);
 </script>
 
 <!-- Chart.js: loaded AFTER page renders, so page works even if CDN fails -->
