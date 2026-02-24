@@ -30,10 +30,12 @@
   .big-rate { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.02em; }
   .badge { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.75rem; font-weight: 500; padding: 0.25rem 0.75rem; border-radius: 9999px; }
   .badge-buy { background: rgba(34,197,94,0.15); color: var(--buy); }
+  .badge-strongbuy { background: rgba(34,197,94,0.25); color: var(--buy); border: 1px solid rgba(34,197,94,0.4); }
   .badge-sell { background: rgba(249,115,22,0.15); color: var(--sell); }
+  .badge-strongsell { background: rgba(239,68,68,0.2); color: var(--danger); border: 1px solid rgba(239,68,68,0.3); }
   .badge-neutral { background: rgba(99,102,241,0.15); color: var(--accent); }
   .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; animation: pulse-soft 2s ease-in-out infinite; }
-  .badge-buy .dot { background: var(--buy); } .badge-sell .dot { background: var(--sell); } .badge-neutral .dot { background: var(--accent); }
+  .badge-buy .dot { background: var(--buy); } .badge-strongbuy .dot { background: var(--buy); } .badge-sell .dot { background: var(--sell); } .badge-strongsell .dot { background: var(--danger); } .badge-neutral .dot { background: var(--accent); }
   @keyframes pulse-soft { 0%,100%{opacity:1} 50%{opacity:0.5} }
   .diff { font-size: 0.875rem; font-weight: 500; }
   .diff.up { color: var(--sell); } .diff.down { color: var(--buy); }
@@ -79,7 +81,14 @@
   .bold { color: rgba(255,255,255,0.8); font-weight: 500; }
   .btn-del { background: none; border: none; color: rgba(255,255,255,0.2); cursor: pointer; padding: 0.25rem; }
   .btn-del:hover { color: var(--danger); }
-  .chart-box { position: relative; height: 240px; margin-top: 0.5rem; }
+  .chart-box { position: relative; height: 260px; margin-top: 0.5rem; }
+  .chart-toolbar { display:flex; align-items:center; gap:0.375rem; }
+  .chart-toolbar button { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); color:rgba(255,255,255,0.4); padding:0.25rem 0.625rem; border-radius:0.375rem; cursor:pointer; font-size:0.6875rem; transition:all 0.15s; }
+  .chart-toolbar button:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.7); }
+  .chart-toolbar button.active { background:rgba(99,102,241,0.2); border-color:rgba(99,102,241,0.4); color:var(--accent); font-weight:600; }
+  .sma-legend { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.375rem; font-size:0.625rem; color:rgba(255,255,255,0.35); }
+  .sma-legend span { display:flex; align-items:center; gap:0.25rem; }
+  .sma-dot { width:8px; height:2px; border-radius:1px; display:inline-block; }
   .insight-row { display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 0.75rem; }
   .insight-text { font-size: 0.875rem; color: rgba(255,255,255,0.7); line-height: 1.6; }
   .verdict { border-radius: 0.75rem; border: 1px solid; padding: 1rem; margin-top: 0.5rem; }
@@ -129,24 +138,39 @@
   <div id="charts-area" class="grid-charts mb hidden">
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">USD / TWD — 30 日走勢</h3>
-        <span id="usd-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">USD / TWD</h3>
+        <div class="chart-toolbar" id="tb-usd">
+          <button onclick="setChartPeriod('usd',30)" class="active">30D</button>
+          <button onclick="setChartPeriod('usd',60)">60D</button>
+          <button onclick="setChartPeriod('usd',90)">90D</button>
+        </div>
       </div>
       <div class="chart-box"><canvas id="chart-usd"></canvas></div>
+      <div class="sma-legend"><span><i class="sma-dot" style="background:#f59e0b"></i>SMA10</span><span><i class="sma-dot" style="background:#3b82f6"></i>SMA20</span><span><i class="sma-dot" style="background:#ef4444"></i>SMA30</span></div>
     </div>
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">EUR / TWD — 30 日走勢</h3>
-        <span id="eur-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">EUR / TWD</h3>
+        <div class="chart-toolbar" id="tb-eur">
+          <button onclick="setChartPeriod('eur',30)" class="active">30D</button>
+          <button onclick="setChartPeriod('eur',60)">60D</button>
+          <button onclick="setChartPeriod('eur',90)">90D</button>
+        </div>
       </div>
       <div class="chart-box"><canvas id="chart-eur"></canvas></div>
+      <div class="sma-legend"><span><i class="sma-dot" style="background:#f59e0b"></i>SMA10</span><span><i class="sma-dot" style="background:#3b82f6"></i>SMA20</span><span><i class="sma-dot" style="background:#ef4444"></i>SMA30</span></div>
     </div>
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD — 30 日走勢（每百圓）</h3>
-        <span id="jpy-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD（每百圓）</h3>
+        <div class="chart-toolbar" id="tb-jpy">
+          <button onclick="setChartPeriod('jpy',30)" class="active">30D</button>
+          <button onclick="setChartPeriod('jpy',60)">60D</button>
+          <button onclick="setChartPeriod('jpy',90)">90D</button>
+        </div>
       </div>
       <div class="chart-box"><canvas id="chart-jpy"></canvas></div>
+      <div class="sma-legend"><span><i class="sma-dot" style="background:#f59e0b"></i>SMA10</span><span><i class="sma-dot" style="background:#3b82f6"></i>SMA20</span><span><i class="sma-dot" style="background:#ef4444"></i>SMA30</span></div>
     </div>
   </div>
 
@@ -172,6 +196,7 @@ var STORAGE_KEY = 'twd-dashboard-exchanges';
 var appData = null;
 var exchanges = [];
 var usdChart = null, eurChart = null, jpyChart = null;
+var chartPeriods = { usd: 30, eur: 30, jpy: 30 };
 
 try { exchanges = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { exchanges = []; }
 function saveExchanges() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(exchanges)); } catch(e){} }
@@ -332,24 +357,59 @@ function genHistory(current, volatility) {
 
 function avg(arr) { return arr.length ? arr.reduce(function(s,n){return s+n},0)/arr.length : 0; }
 
-function getSignal(current, avg30) {
-  var diff = avg30 ? ((current-avg30)/avg30)*100 : 0;
-  if (diff < -0.3) return { label:'適合買入', cls:'buy', diff:diff };
-  if (diff > 0.3) return { label:'高於均價', cls:'sell', diff:diff };
-  return { label:'持平觀望', cls:'neutral', diff:diff };
+// Calculate Simple Moving Average for an array of rates
+function calcSma(rates, period) {
+  var sma = [];
+  for (var i = 0; i < rates.length; i++) {
+    if (i < period - 1) { sma.push(null); continue; }
+    var sum = 0;
+    for (var j = i - period + 1; j <= i; j++) sum += rates[j];
+    sma.push(parseFloat((sum / period).toFixed(4)));
+  }
+  return sma;
+}
+
+// Multi-SMA signal: compare current rate vs SMA10, SMA20, SMA30
+function getSignal(current, sma10, sma20, sma30) {
+  var below = 0;
+  if (sma10 && current < sma10) below++;
+  if (sma20 && current < sma20) below++;
+  if (sma30 && current < sma30) below++;
+  var avgRef = sma30 || sma20 || sma10 || current;
+  var diff = avgRef ? ((current - avgRef) / avgRef) * 100 : 0;
+  if (below === 3) return { label:'強力買入', cls:'buy', diff:diff, level:3 };
+  if (below === 2) return { label:'適合買入', cls:'buy', diff:diff, level:2 };
+  if (below === 1) return { label:'持平觀望', cls:'neutral', diff:diff, level:1 };
+  // current >= all SMAs
+  var above = 0;
+  if (sma10 && current > sma10) above++;
+  if (sma20 && current > sma20) above++;
+  if (sma30 && current > sma30) above++;
+  if (above === 3) return { label:'偏高警示', cls:'sell', diff:diff, level:-3 };
+  if (above >= 2) return { label:'高於均線', cls:'sell', diff:diff, level:-2 };
+  return { label:'持平觀望', cls:'neutral', diff:diff, level:0 };
 }
 
 function buildCurrencyData(pair, currency, spotSell, spotBuy, history) {
   var rates = history.map(function(d){return d.rate});
-  var avgVal = rates.length > 0 ? avg(rates) : spotSell;
+  var last30 = rates.slice(-30);
+  var avgVal = last30.length > 0 ? avg(last30) : spotSell;
+  // Calculate current SMA values (last value of each SMA array)
+  var sma10arr = calcSma(rates, 10);
+  var sma20arr = calcSma(rates, 20);
+  var sma30arr = calcSma(rates, 30);
+  var sma10 = sma10arr.length > 0 ? sma10arr[sma10arr.length - 1] : null;
+  var sma20 = sma20arr.length > 0 ? sma20arr[sma20arr.length - 1] : null;
+  var sma30 = sma30arr.length > 0 ? sma30arr[sma30arr.length - 1] : null;
   return {
     pair: pair, currency: currency,
     spotSell: parseFloat(spotSell.toFixed(4)), spotBuy: parseFloat(spotBuy.toFixed(4)),
     spread: parseFloat((spotSell - spotBuy).toFixed(4)),
     avg30d: parseFloat(avgVal.toFixed(4)),
-    min30d: rates.length > 0 ? parseFloat(Math.min.apply(null, rates).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
-    max30d: rates.length > 0 ? parseFloat(Math.max.apply(null, rates).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
-    signal: getSignal(spotSell, avgVal), history: history
+    sma10: sma10, sma20: sma20, sma30: sma30,
+    min30d: last30.length > 0 ? parseFloat(Math.min.apply(null, last30).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
+    max30d: last30.length > 0 ? parseFloat(Math.max.apply(null, last30).toFixed(4)) : parseFloat(spotSell.toFixed(4)),
+    signal: getSignal(spotSell, sma10, sma20, sma30), history: history
   };
 }
 
@@ -365,8 +425,8 @@ function buildBotData(todayRates, historyMap) {
   function makeHist(cur, fallbackRate) {
     if (!historyMap) return genHistory(fallbackRate, cur === 'JPY' ? 0.003 : (cur === 'EUR' ? 0.18 : 0.15));
     var dates = Object.keys(historyMap).sort();
-    var last30 = dates.slice(-30);
-    return last30.map(function(dateStr) {
+    var last90 = dates.slice(-90); // Keep 90 days for SMA + period toggle
+    return last90.map(function(dateStr) {
       var d = new Date(dateStr);
       var entry = historyMap[dateStr];
       return { date: (d.getMonth()+1) + '/' + d.getDate(), rate: entry[cur] ? entry[cur].spotSell : 0 };
@@ -407,9 +467,9 @@ function showNotice(msg, type) {
     buildBotData(todayRates, null);
     render();
     var tcbStatus = tcbRates ? ' + 合作金庫' : '';
-    showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入 30 日歷史...', 'info');
-    return fetchBotHistory(30, function(fetched, total, collected) {
-      showNotice('載入歷史資料 (' + collected + '/30 天)...', 'info');
+    showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入歷史資料...', 'info');
+    return fetchBotHistory(90, function(fetched, total, collected) {
+      showNotice('載入歷史資料 (' + collected + '/90 天)...', 'info');
     }).then(function(historyMap) {
       var dayCount = Object.keys(historyMap).length;
       if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
@@ -460,7 +520,10 @@ function renderCard(id, d) {
   el.className = 'glass rate-card ' + glowCls;
   var diffDir = s.diff < 0 ? 'down' : 'up';
   var diffSign = s.diff > 0 ? '+' : '';
-  var alertHtml = s.cls==='buy' ? '<div class="alert-box">省錢機會 — 低於 30 日均價 '+Math.abs(s.diff).toFixed(2)+'%</div>' : '';
+  var alertHtml = '';
+  if (s.level === 3) alertHtml = '<div class="alert-box">強力買入 — 低於全部三條均線（SMA10/20/30）</div>';
+  else if (s.level === 2) alertHtml = '<div class="alert-box">省錢機會 — 低於兩條均線</div>';
+  var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
   var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
 
   // TCB comparison
@@ -490,7 +553,7 @@ function renderCard(id, d) {
   el.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
       '<div><div class="pair">'+d.pair+'</div><div class="source">台灣銀行牌告</div></div>' +
-      '<span class="badge badge-'+s.cls+'"><span class="dot"></span>'+s.label+'</span>' +
+      '<span class="badge badge-'+badgeCls+'"><span class="dot"></span>'+s.label+'</span>' +
     '</div>' +
     '<div style="margin-bottom:0.25rem"><div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.25rem">'+rateLabel+'</div>' +
       '<div class="big-rate">'+(d.spotSell*m).toFixed(dp)+'</div></div>' +
@@ -500,10 +563,10 @@ function renderCard(id, d) {
     '</div>' +
     alertHtml +
     '<div class="stat-grid">' +
-      '<div class="stat"><div class="stat-label">30日均價</div><div class="stat-value">'+(d.avg30d*m).toFixed(dp)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">匯差(買賣價差)</div><div class="stat-value">'+(d.spread*m).toFixed(dp)+'</div><div class="stat-sub">即期買入 '+(d.spotBuy*m).toFixed(dp)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">30日最低</div><div class="stat-value">'+(d.min30d*m).toFixed(dp)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">30日最高</div><div class="stat-value">'+(d.max30d*m).toFixed(dp)+'</div></div>' +
+      '<div class="stat"><div class="stat-label">SMA10</div><div class="stat-value">'+(d.sma10 ? (d.sma10*m).toFixed(dp) : '-')+'</div><div class="stat-sub" style="color:'+(d.spotSell<d.sma10?'var(--buy)':'var(--sell)')+'">'+( d.sma10 ? (d.spotSell<d.sma10?'▼ 低於':'▲ 高於') : '' )+'</div></div>' +
+      '<div class="stat"><div class="stat-label">SMA20</div><div class="stat-value">'+(d.sma20 ? (d.sma20*m).toFixed(dp) : '-')+'</div><div class="stat-sub" style="color:'+(d.spotSell<d.sma20?'var(--buy)':'var(--sell)')+'">'+( d.sma20 ? (d.spotSell<d.sma20?'▼ 低於':'▲ 高於') : '' )+'</div></div>' +
+      '<div class="stat"><div class="stat-label">SMA30</div><div class="stat-value">'+(d.sma30 ? (d.sma30*m).toFixed(dp) : '-')+'</div><div class="stat-sub" style="color:'+(d.spotSell<d.sma30?'var(--buy)':'var(--sell)')+'">'+( d.sma30 ? (d.spotSell<d.sma30?'▼ 低於':'▲ 高於') : '' )+'</div></div>' +
+      '<div class="stat"><div class="stat-label">匯差</div><div class="stat-value">'+(d.spread*m).toFixed(dp)+'</div><div class="stat-sub">買入 '+(d.spotBuy*m).toFixed(dp)+'</div></div>' +
     '</div>' +
     tcbHtml;
 }
@@ -619,59 +682,107 @@ function toggleHistory() {
 }
 
 // ---- Charts (optional — only if Chart.js CDN loaded) ----
-function renderCharts() {
-  document.getElementById('charts-area').className = 'grid-charts mb';
-  document.getElementById('usd-avg-label').textContent = '均價：'+appData.usd.avg30d.toFixed(4);
-  document.getElementById('eur-avg-label').textContent = '均價：'+appData.eur.avg30d.toFixed(4);
-  document.getElementById('jpy-avg-label').textContent = '均價：'+(appData.jpy.avg30d*100).toFixed(2);
+function setChartPeriod(cur, days) {
+  chartPeriods[cur] = days;
+  // Update toolbar active state
+  var tb = document.getElementById('tb-' + cur);
+  if (tb) {
+    var btns = tb.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].className = btns[i].textContent === days + 'D' ? 'active' : '';
+    }
+  }
+  if (typeof Chart !== 'undefined') renderSingleChart(cur);
+}
 
-  function makeCfg(data, avgVal, color) {
-    return {
-      type: 'line',
-      data: { labels: data.map(function(d){return d.date}), datasets: [{
-        data: data.map(function(d){return d.rate}), borderColor: color, borderWidth: 2,
-        backgroundColor: color+'20', fill: true, tension: 0.3, pointRadius: 0,
-        pointHoverRadius: 5, pointHoverBackgroundColor: color
-      }]},
-      options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false },
-          tooltip: { backgroundColor:'rgba(22,24,34,0.9)', borderColor:'rgba(255,255,255,0.12)', borderWidth:1,
-            titleColor:'rgba(255,255,255,0.5)', bodyColor:'#fff', bodyFont:{weight:'bold'},
-            callbacks: { label: function(ctx){return ctx.parsed.y.toFixed(4)} } } },
-        scales: {
-          x: { ticks: { color:'rgba(255,255,255,0.3)', font:{size:11}, maxTicksLimit:8 }, grid: { color:'rgba(255,255,255,0.04)' } },
-          y: { ticks: { color:'rgba(255,255,255,0.3)', font:{size:11}, callback: function(v){return v.toFixed(1)} }, grid: { color:'rgba(255,255,255,0.04)' } }
+function sliceHistory(hist, days) {
+  return hist.length > days ? hist.slice(-days) : hist;
+}
+
+function makeSmaDataset(rates, period, color) {
+  var sma = calcSma(rates, period);
+  return {
+    data: sma, borderColor: color, borderWidth: 1.5,
+    borderDash: [4, 3], pointRadius: 0, tension: 0.3,
+    fill: false, spanGaps: true
+  };
+}
+
+function makeChartCfg(data, color, isJpy) {
+  var m = isJpy ? 100 : 1;
+  var dp = isJpy ? 2 : 4;
+  var chartData = data.map(function(d) { return { date: d.date, rate: parseFloat((d.rate * m).toFixed(dp)) }; });
+  var rates = chartData.map(function(d) { return d.rate; });
+  var labels = chartData.map(function(d) { return d.date; });
+
+  return {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { data: rates, borderColor: color, borderWidth: 2, backgroundColor: color + '20', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: color, order: 0 },
+        makeSmaDataset(rates, 10, '#f59e0b'),
+        makeSmaDataset(rates, 20, '#3b82f6'),
+        makeSmaDataset(rates, 30, '#ef4444')
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(22,24,34,0.9)', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1,
+          titleColor: 'rgba(255,255,255,0.5)', bodyColor: '#fff', bodyFont: { weight: 'bold' },
+          filter: function(item) { return item.datasetIndex === 0; },
+          callbacks: { label: function(ctx) { return ctx.parsed.y.toFixed(dp); } }
         }
       },
-      plugins: [{ id:'avg', beforeDraw: function(chart) {
-        var y = chart.scales.y.getPixelForValue(avgVal);
-        if (y < chart.chartArea.top || y > chart.chartArea.bottom) return;
-        var ctx = chart.ctx; ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.setLineDash([6,4]); ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(chart.chartArea.left, y); ctx.lineTo(chart.chartArea.right, y); ctx.stroke();
-        ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.font = '10px sans-serif';
-        ctx.fillText('均價 '+avgVal.toFixed(4), chart.chartArea.right - 85, y - 6);
-        ctx.restore();
-      }}]
-    };
-  }
-  if (usdChart) usdChart.destroy();
-  if (eurChart) eurChart.destroy();
-  if (jpyChart) jpyChart.destroy();
-  var jpyHist100 = appData.jpy.history.map(function(d){ return { date: d.date, rate: parseFloat((d.rate*100).toFixed(2)) }; });
-  usdChart = new Chart(document.getElementById('chart-usd'), makeCfg(appData.usd.history, appData.usd.avg30d, '#6366f1'));
-  eurChart = new Chart(document.getElementById('chart-eur'), makeCfg(appData.eur.history, appData.eur.avg30d, '#8b5cf6'));
-  jpyChart = new Chart(document.getElementById('chart-jpy'), makeCfg(jpyHist100, appData.jpy.avg30d*100, '#f43f5e'));
+      scales: {
+        x: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, callback: function(v) { return v.toFixed(isJpy ? 1 : 2); } }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      }
+    }
+  };
+}
+
+function renderSingleChart(cur) {
+  var map = { usd: { data: appData.usd, color: '#6366f1', chart: usdChart, isJpy: false },
+              eur: { data: appData.eur, color: '#8b5cf6', chart: eurChart, isJpy: false },
+              jpy: { data: appData.jpy, color: '#f43f5e', chart: jpyChart, isJpy: true } };
+  var c = map[cur];
+  var period = chartPeriods[cur];
+  var sliced = sliceHistory(c.data.history, period);
+  if (c.chart) c.chart.destroy();
+  var newChart = new Chart(document.getElementById('chart-' + cur), makeChartCfg(sliced, c.color, c.isJpy));
+  if (cur === 'usd') usdChart = newChart;
+  else if (cur === 'eur') eurChart = newChart;
+  else jpyChart = newChart;
+}
+
+function renderCharts() {
+  document.getElementById('charts-area').className = 'grid-charts mb';
+  renderSingleChart('usd');
+  renderSingleChart('eur');
+  renderSingleChart('jpy');
 }
 
 // ---- Insight ----
 function addCurrencyInsight(insights, data, nameZh) {
-  if (data.signal.diff < -0.3) {
-    insights.push({ color:'var(--buy)', text:nameZh+'即期賣出低於 30 日均價 '+Math.abs(data.signal.diff).toFixed(2)+'%，每單位可省 NT$'+(data.avg30d-data.spotSell).toFixed(3)+'，是換匯好時機。' });
-  } else if (data.signal.diff > 0.3) {
-    insights.push({ color:'var(--sell)', text:nameZh+'即期賣出高於 30 日均價 '+data.signal.diff.toFixed(2)+'%（均價 '+data.avg30d.toFixed(4)+'），建議觀望。' });
+  var s = data.signal;
+  var isJpy = data.currency === 'JPY';
+  var m = isJpy ? 100 : 1;
+  var dp = isJpy ? 2 : 4;
+  // Multi-SMA insight
+  if (s.level === 3) {
+    insights.push({ color:'var(--buy)', text:nameZh+'低於全部三條均線（SMA10/20/30）——強力買入訊號！目前 '+(data.spotSell*m).toFixed(dp)+' 是近期低點。' });
+  } else if (s.level === 2) {
+    insights.push({ color:'var(--buy)', text:nameZh+'低於兩條均線，適合買入。即期賣出 '+(data.spotSell*m).toFixed(dp)+' 低於 30 日均價 '+(data.avg30d*m).toFixed(dp)+'。' });
+  } else if (s.level === -3) {
+    insights.push({ color:'var(--sell)', text:nameZh+'高於全部三條均線——偏高警示！建議暫緩換匯，等待回落。' });
+  } else if (s.level === -2) {
+    insights.push({ color:'var(--sell)', text:nameZh+'高於多數均線，匯率偏高（均價 '+(data.avg30d*m).toFixed(dp)+'），建議觀望。' });
   } else {
-    insights.push({ color:'var(--accent)', text:nameZh+'即期賣出接近 30 日均價，目前無明顯換匯優勢。' });
+    insights.push({ color:'var(--accent)', text:nameZh+'位於均線交叉附近，目前無明顯方向性訊號。' });
   }
   // Bank comparison insight
   if (tcbRates && tcbRates[data.currency]) {
@@ -680,7 +791,6 @@ function addCurrencyInsight(insights, data, nameZh) {
     var diff = tcbSell - botSell;
     if (Math.abs(diff) > 0.0001) {
       var cheaper = diff > 0 ? '台銀' : '合庫';
-      var isJpy = data.currency === 'JPY';
       var savePer = Math.abs(diff);
       var saveText = isJpy ? '每萬日圓省 NT$'+(savePer*10000).toFixed(0) : '每千元省 NT$'+(savePer*1000).toFixed(1);
       insights.push({ color:'var(--accent)', text:nameZh+'買入：'+cheaper+'較便宜（價差 '+(isJpy?(savePer*100).toFixed(2):savePer.toFixed(4))+'，'+saveText+'）。' });
@@ -696,14 +806,24 @@ function renderInsight() {
   addCurrencyInsight(insights, e, '歐元');
   addCurrencyInsight(insights, j, '日幣');
 
-  insights.push({ color:'rgba(255,255,255,0.4)', text:'今日匯差：美元 '+u.spread.toFixed(3)+' · 歐元 '+e.spread.toFixed(3)+' · 日幣 '+j.spread.toFixed(4)+'（越小代表市場越緊）' });
+  // SMA summary row
+  var smaRow = [u,e,j].map(function(d) {
+    var lbl = d.currency;
+    var s10 = d.sma10 ? (d.spotSell < d.sma10 ? '▼' : '▲') : '-';
+    var s20 = d.sma20 ? (d.spotSell < d.sma20 ? '▼' : '▲') : '-';
+    var s30 = d.sma30 ? (d.spotSell < d.sma30 ? '▼' : '▲') : '-';
+    return lbl + ' ' + s10 + '/' + s20 + '/' + s30;
+  }).join(' · ');
+  insights.push({ color:'rgba(255,255,255,0.4)', text:'均線位置（SMA10/20/30）：' + smaRow + '（▼ = 低於均線 = 有利買入）' });
 
-  var buyCount = [u,e,j].filter(function(d){return d.signal.cls==='buy'}).length;
-  var total = 3;
+  // Overall verdict based on total SMA score
+  var totalLevel = [u,e,j].reduce(function(s,d){ return s + d.signal.level; }, 0);
   var verdict, vCls;
-  if (buyCount >= 2) { verdict='多數幣別低於 30 日均價——今天是換匯的好日子！'; vCls='verdict-buy'; }
-  else if (buyCount === 1) { verdict='訊號不一致——其中一種幣別較有利，請參考上方卡片。'; vCls='verdict-neutral'; }
-  else { verdict='目前無省錢機會，匯率在均價或以上，建議再等等。'; vCls='verdict-sell'; }
+  if (totalLevel >= 6) { verdict='三幣別均低於所有均線——絕佳換匯時機，強力建議買入！'; vCls='verdict-buy'; }
+  else if (totalLevel >= 3) { verdict='多數幣別低於均線——今天是換匯的好日子！'; vCls='verdict-buy'; }
+  else if (totalLevel >= 1) { verdict='部分幣別出現買入訊號，請參考上方卡片判斷。'; vCls='verdict-neutral'; }
+  else if (totalLevel >= -2) { verdict='均線訊號中性——建議持續觀望，等待更明確訊號。'; vCls='verdict-neutral'; }
+  else { verdict='多數幣別高於均線——匯率偏高，建議等待回落再換匯。'; vCls='verdict-sell'; }
 
   var now = new Date();
   var weekdays = ['日','一','二','三','四','五','六'];
