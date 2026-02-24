@@ -17,6 +17,8 @@
   @media (min-width: 768px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
   .grid-3 { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
   @media (min-width: 768px) { .grid-3 { grid-template-columns: 1fr 1fr 1fr; } }
+  .grid-charts { display: grid; grid-template-columns: 1fr; gap: 1.25rem; }
+  @media (min-width: 1024px) { .grid-charts { grid-template-columns: 1fr 1fr 1fr; } }
   .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
   .header h1 { font-size: 1.5rem; font-weight: 700; }
   .header p { font-size: 0.875rem; color: rgba(255,255,255,0.5); }
@@ -124,7 +126,7 @@
   <div id="form-section" class="glass section glow-accent"></div>
 
   <!-- Charts (only if Chart.js loads) -->
-  <div id="charts-area" class="grid-3 mb hidden">
+  <div id="charts-area" class="grid-charts mb hidden">
     <div class="glass section glow-accent">
       <div class="row-between">
         <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">USD / TWD — 30 日走勢</h3>
@@ -141,7 +143,7 @@
     </div>
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD — 30 日走勢</h3>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD — 30 日走勢（每百圓）</h3>
         <span id="jpy-avg-label" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
       </div>
       <div class="chart-box"><canvas id="chart-jpy"></canvas></div>
@@ -406,30 +408,34 @@ function render() {
 
 function renderCard(id, d) {
   var s = d.signal;
+  var isJpy = d.currency === 'JPY';
+  var m = isJpy ? 100 : 1; // JPY shows per 100 units
+  var dp = isJpy ? 2 : 4;  // decimal places
   var glowCls = s.cls==='buy'?'glow-green':s.cls==='sell'?'glow-orange':'glow-accent';
   var el = document.getElementById(id);
   el.className = 'glass rate-card ' + glowCls;
   var diffDir = s.diff < 0 ? 'down' : 'up';
   var diffSign = s.diff > 0 ? '+' : '';
   var alertHtml = s.cls==='buy' ? '<div class="alert-box">省錢機會 — 低於 30 日均價 '+Math.abs(s.diff).toFixed(2)+'%</div>' : '';
+  var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
 
   el.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
-      '<div><div class="pair">'+d.pair+'</div><div class="source">即時匯率</div></div>' +
+      '<div><div class="pair">'+d.pair+'</div><div class="source">台灣銀行牌告</div></div>' +
       '<span class="badge badge-'+s.cls+'"><span class="dot"></span>'+s.label+'</span>' +
     '</div>' +
-    '<div style="margin-bottom:0.25rem"><div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.25rem">即期賣出（你的買入成本）</div>' +
-      '<div class="big-rate">'+d.spotSell.toFixed(4)+'</div></div>' +
+    '<div style="margin-bottom:0.25rem"><div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.25rem">'+rateLabel+'</div>' +
+      '<div class="big-rate">'+(d.spotSell*m).toFixed(dp)+'</div></div>' +
     '<div style="display:flex;align-items:center;gap:0.375rem;margin-bottom:1.25rem">' +
       '<span class="diff '+diffDir+'">'+diffSign+s.diff.toFixed(2)+'%</span>' +
       '<span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">較 30 日均價</span>' +
     '</div>' +
     alertHtml +
     '<div class="stat-grid">' +
-      '<div class="stat"><div class="stat-label">30日均價</div><div class="stat-value">'+d.avg30d.toFixed(4)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">匯差(買賣價差)</div><div class="stat-value">'+d.spread.toFixed(4)+'</div><div class="stat-sub">即期買入 '+d.spotBuy.toFixed(4)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">30日最低</div><div class="stat-value">'+d.min30d.toFixed(4)+'</div></div>' +
-      '<div class="stat"><div class="stat-label">30日最高</div><div class="stat-value">'+d.max30d.toFixed(4)+'</div></div>' +
+      '<div class="stat"><div class="stat-label">30日均價</div><div class="stat-value">'+(d.avg30d*m).toFixed(dp)+'</div></div>' +
+      '<div class="stat"><div class="stat-label">匯差(買賣價差)</div><div class="stat-value">'+(d.spread*m).toFixed(dp)+'</div><div class="stat-sub">即期買入 '+(d.spotBuy*m).toFixed(dp)+'</div></div>' +
+      '<div class="stat"><div class="stat-label">30日最低</div><div class="stat-value">'+(d.min30d*m).toFixed(dp)+'</div></div>' +
+      '<div class="stat"><div class="stat-label">30日最高</div><div class="stat-value">'+(d.max30d*m).toFixed(dp)+'</div></div>' +
     '</div>';
 }
 
@@ -545,10 +551,10 @@ function toggleHistory() {
 
 // ---- Charts (optional — only if Chart.js CDN loaded) ----
 function renderCharts() {
-  document.getElementById('charts-area').className = 'grid-3 mb';
+  document.getElementById('charts-area').className = 'grid-charts mb';
   document.getElementById('usd-avg-label').textContent = '均價：'+appData.usd.avg30d.toFixed(4);
   document.getElementById('eur-avg-label').textContent = '均價：'+appData.eur.avg30d.toFixed(4);
-  document.getElementById('jpy-avg-label').textContent = '均價：'+appData.jpy.avg30d.toFixed(4);
+  document.getElementById('jpy-avg-label').textContent = '均價：'+(appData.jpy.avg30d*100).toFixed(2);
 
   function makeCfg(data, avgVal, color) {
     return {
@@ -583,9 +589,10 @@ function renderCharts() {
   if (usdChart) usdChart.destroy();
   if (eurChart) eurChart.destroy();
   if (jpyChart) jpyChart.destroy();
+  var jpyHist100 = appData.jpy.history.map(function(d){ return { date: d.date, rate: parseFloat((d.rate*100).toFixed(2)) }; });
   usdChart = new Chart(document.getElementById('chart-usd'), makeCfg(appData.usd.history, appData.usd.avg30d, '#6366f1'));
   eurChart = new Chart(document.getElementById('chart-eur'), makeCfg(appData.eur.history, appData.eur.avg30d, '#8b5cf6'));
-  jpyChart = new Chart(document.getElementById('chart-jpy'), makeCfg(appData.jpy.history, appData.jpy.avg30d, '#f43f5e'));
+  jpyChart = new Chart(document.getElementById('chart-jpy'), makeCfg(jpyHist100, appData.jpy.avg30d*100, '#f43f5e'));
 }
 
 // ---- Insight ----
