@@ -1,0 +1,76 @@
+name: Update BOT Exchange Rates
+on:
+  schedule:
+    - cron: '30 2,8 * * 1-5'  # 10:30 & 16:30 Taiwan time (UTC+8), weekdays
+  workflow_dispatch:  # manual trigger
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch today BOT rates and update history
+        run: |
+          set -e
+          FILE="data/rates-history.json"
+          DATE=$(TZ=Asia/Taipei date +%Y-%m-%d)
+
+          # Fetch today's BOT CSV
+          CSV=$(curl -sL "https://rate.bot.com.tw/xrt/flcsv/0/day" \
+            -H "User-Agent: Mozilla/5.0 (X11; Linux x86_64)" \
+            --retry 3 --retry-delay 5)
+
+          if ! echo "$CSV" | grep -q "USD"; then
+            echo "No valid data from BOT, skipping"
+            exit 0
+          fi
+
+          USD_BUY=$(echo "$CSV" | grep "USD" | head -1 | cut -d',' -f4)
+          USD_SELL=$(echo "$CSV" | grep "USD" | head -1 | cut -d',' -f14)
+          EUR_BUY=$(echo "$CSV" | grep "EUR" | head -1 | cut -d',' -f4)
+          EUR_SELL=$(echo "$CSV" | grep "EUR" | head -1 | cut -d',' -f14)
+          JPY_BUY=$(echo "$CSV" | grep "JPY" | head -1 | cut -d',' -f4)
+          JPY_SELL=$(echo "$CSV" | grep "JPY" | head -1 | cut -d',' -f14)
+
+          if [ -z "$USD_BUY" ] || [ -z "$EUR_BUY" ] || [ -z "$JPY_BUY" ]; then
+            echo "Incomplete rate data, skipping"
+            exit 0
+          fi
+
+          echo "Date: $DATE"
+          echo "USD: $USD_BUY / $USD_SELL"
+          echo "EUR: $EUR_BUY / $EUR_SELL"
+          echo "JPY: $JPY_BUY / $JPY_SELL"
+
+          # Build new entry JSON
+          NEW_ENTRY=$(printf '"USD":{"spotBuy":%s,"spotSell":%s},"EUR":{"spotBuy":%s,"spotSell":%s},"JPY":{"spotBuy":%s,"spotSell":%s}' \
+            "$USD_BUY" "$USD_SELL" "$EUR_BUY" "$EUR_SELL" "$JPY_BUY" "$JPY_SELL")
+
+          # Update JSON: add/replace today's entry, keep last 120 days
+          python3 << PYEOF
+          import json
+          with open("$FILE", "r") as f:
+              data = json.load(f)
+          data["$DATE"] = json.loads('{${NEW_ENTRY}}')
+          # Keep only last 120 entries
+          sorted_keys = sorted(data.keys())
+          if len(sorted_keys) > 120:
+              for k in sorted_keys[:-120]:
+                  del data[k]
+          with open("$FILE", "w") as f:
+              json.dump(dict(sorted(data.items())), f, separators=(",", ":"))
+          print(f"Updated: {len(data)} days in history")
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/rates-history.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update BOT exchange rates $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git push
+          fi

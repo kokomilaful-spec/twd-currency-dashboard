@@ -215,7 +215,6 @@ var CORS_PROXIES = [
   function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
 ];
 var BOT_TODAY = 'https://rate.bot.com.tw/xrt/flcsv/0/day';
-var BOT_HIST = 'https://rate.bot.com.tw/xrt/flcsv/0/';
 var TCB_URL = 'https://www.findrate.tw/bank/10/'; // 合作金庫 via findrate.tw
 var tcbRates = null; // { USD:{spotBuy,spotSell}, EUR:{…}, JPY:{…} }
 
@@ -289,56 +288,34 @@ function fetchTcbRates() {
   });
 }
 
-function tradingDays(count) {
-  var dates = [];
-  var d = new Date();
-  for (var i = 0; i < count * 3 && dates.length < count; i++) {
-    d.setDate(d.getDate() - 1);
-    var dow = d.getDay();
-    if (dow !== 0 && dow !== 6) dates.push(d.toISOString().slice(0, 10));
-  }
-  return dates;
-}
+var RATES_JSON_URL = 'data/rates-history.json';
 
 function loadHistCache() {
   try { return JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}'); } catch(e) { return {}; }
 }
 function saveHistCache(cache) {
   try {
-    var keys = Object.keys(cache).sort().reverse().slice(0, 90);
+    var keys = Object.keys(cache).sort().reverse().slice(0, 120);
     var trimmed = {};
     for (var i = 0; i < keys.length; i++) trimmed[keys[i]] = cache[keys[i]];
     localStorage.setItem(HIST_CACHE_KEY, JSON.stringify(trimmed));
   } catch(e) {}
 }
 
-function fetchBotHistory(days, onProgress) {
-  var candidates = tradingDays(days * 2);
-  var cache = loadHistCache();
-  var results = {};
-  var toFetch = [];
-  for (var i = 0; i < candidates.length; i++) {
-    if (cache[candidates[i]]) results[candidates[i]] = cache[candidates[i]];
-    else toFetch.push(candidates[i]);
-  }
-  var collected = Object.keys(results).length;
-  if (collected >= days) return Promise.resolve(results);
-
-  var fetched = 0;
-  var total = toFetch.length;
-  function processBatch(si) {
-    if (si >= toFetch.length || collected >= days) return Promise.resolve();
-    var batch = toFetch.slice(si, si + 5);
-    return Promise.all(batch.map(function(date) {
-      return fetchViaProxy(BOT_HIST + date).then(function(text) {
-        var r = parseBotCsv(text);
-        if (r.USD && r.EUR && r.JPY) { results[date] = r; cache[date] = r; collected++; }
-        fetched++;
-        if (onProgress) onProgress(fetched, total, collected);
-      }).catch(function() { fetched++; if (onProgress) onProgress(fetched, total, collected); });
-    })).then(function() { return processBatch(si + 5); });
-  }
-  return processBatch(0).then(function() { saveHistCache(cache); return results; });
+function fetchRatesHistory() {
+  return fetch(RATES_JSON_URL + '?_t=' + Date.now(), { cache: 'no-store' })
+    .then(function(res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    })
+    .then(function(data) {
+      // Merge into localStorage cache
+      var cache = loadHistCache();
+      var keys = Object.keys(data);
+      for (var i = 0; i < keys.length; i++) cache[keys[i]] = data[keys[i]];
+      saveHistCache(cache);
+      return cache;
+    });
 }
 
 // ============================================================
@@ -506,14 +483,12 @@ function refreshRates(isAuto) {
       render();
       var tcbStatus = tcbRates ? ' + 合作金庫' : '';
       showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入歷史資料...', 'info');
-      return fetchBotHistory(90, function(fetched, total, collected) {
-        showNotice('載入歷史資料 (' + collected + '/90 天)...', 'info');
-      }).then(function(historyMap) {
+      return fetchRatesHistory().then(function(historyMap) {
         lastHistoryMap = historyMap;
         var dayCount = Object.keys(historyMap).length;
         if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
         var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
-        showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日歷史 · 每 5 分鐘自動更新）', 'ok');
+        showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日真實歷史 · 每 5 分鐘自動更新）', 'ok');
         setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
       });
     }
