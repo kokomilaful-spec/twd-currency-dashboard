@@ -53,8 +53,9 @@
   .pnl-loss { border-color: rgba(239,68,68,0.2); background: rgba(239,68,68,0.08); color: var(--danger); }
   .pnl-neutral { border-color: rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.4); }
   .pnl-amount { font-size: 1.125rem; font-weight: 700; }
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-  @media (min-width: 640px) { .form-grid { grid-template-columns: 1fr 1fr 1fr 1fr auto; } }
+  .form-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; }
+  @media (min-width: 480px) { .form-grid { grid-template-columns: 1fr 1fr; } .form-grid .form-submit { grid-column: 1 / -1; } }
+  @media (min-width: 640px) { .form-grid { grid-template-columns: 1fr 1fr 1fr 1fr auto; } .form-grid .form-submit { grid-column: auto; } }
   .form-label { font-size: 0.6875rem; color: rgba(255,255,255,0.4); margin-bottom: 0.25rem; display: block; }
   .form-input { width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 0.5rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; color: #fff; outline: none; }
   .form-input:focus { border-color: rgba(99,102,241,0.5); }
@@ -333,7 +334,7 @@ function renderForm() {
       '<div><label class="form-label">幣別</label><select id="f-currency" class="form-input"><option value="USD">美元 USD</option><option value="EUR">歐元 EUR</option></select></div>' +
       '<div><label class="form-label">金額</label><input type="number" id="f-amount" class="form-input" step="0.01" min="0" placeholder="10000" oninput="updatePreview()"></div>' +
       '<div><label class="form-label">匯率 <button class="btn-link" type="button" onclick="prefillRate()">[帶入今日]</button></label><input type="number" id="f-rate" class="form-input" step="0.0001" min="0" placeholder="31.5250" oninput="updatePreview()"></div>' +
-      '<div style="display:flex;align-items:flex-end"><button class="btn-accent" style="width:100%" type="button" onclick="addRecord()">+ 新增</button></div></div>' +
+      '<div class="form-submit" style="display:flex;align-items:flex-end"><button class="btn-accent" style="width:100%" type="button" onclick="addRecord()">+ 新增</button></div></div>' +
     '<div id="preview" class="preview hidden"></div>' +
     '<div id="history-table" class="hidden"></div>';
 }
