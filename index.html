@@ -178,7 +178,7 @@
   <!-- Daily Insight -->
   <div id="insight-section" class="glass section glow-accent"></div>
 
-  <div class="footer">資料來源：台灣銀行 + 合作金庫牌告匯率 · 僅供參考，非投資建議</div>
+  <div class="footer">資料來源：合作金庫牌告匯率 · 僅供參考，非投資建議</div>
 </div>
 
 <script>
@@ -207,16 +207,14 @@ function genId() {
 }
 
 // ============================================================
-// BOT Data Fetching (CORS Proxy)
+// 合作金庫 Data Fetching (CORS Proxy + findrate.tw)
 // ============================================================
 var HIST_CACHE_KEY = 'twd-hist-cache';
 var CORS_PROXIES = [
   function(u) { return 'https://corsproxy.io/?' + encodeURIComponent(u); },
   function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
 ];
-var BOT_TODAY = 'https://rate.bot.com.tw/xrt/flcsv/0/day';
-var TCB_URL = 'https://www.findrate.tw/bank/10/'; // 合作金庫 via findrate.tw
-var tcbRates = null; // { USD:{spotBuy,spotSell}, EUR:{…}, JPY:{…} }
+var TCB_URL = 'https://www.findrate.tw/bank/10/';
 
 function fetchViaProxy(url, bustCache) {
   var fetchUrl = bustCache ? url + (url.indexOf('?')>=0?'&':'?') + '_t=' + Date.now() : url;
@@ -236,28 +234,9 @@ function fetchViaProxy(url, bustCache) {
   return tryNext();
 }
 
-function parseBotCsv(text) {
-  var lines = text.split('\n');
-  var rates = {};
-  for (var i = 1; i < lines.length; i++) {
-    var line = lines[i].trim();
-    if (!line) continue;
-    var cols = line.split(',');
-    var name = (cols[0] || '').replace(/"/g, '').trim();
-    var spotBuy = parseFloat(cols[3]);
-    var spotSell = parseFloat(cols[13]);
-    if (!spotBuy || !spotSell || isNaN(spotBuy) || isNaN(spotSell)) continue;
-    if (name.indexOf('USD') >= 0 && !rates.USD) rates.USD = { spotBuy: spotBuy, spotSell: spotSell };
-    else if (name.indexOf('EUR') >= 0 && !rates.EUR) rates.EUR = { spotBuy: spotBuy, spotSell: spotSell };
-    else if (name.indexOf('JPY') >= 0 && !rates.JPY) rates.JPY = { spotBuy: spotBuy, spotSell: spotSell };
-  }
-  return rates;
-}
-
 function parseFindRateHtml(html) {
   var rates = {};
   var currencyMap = { '美金': 'USD', '歐元': 'EUR', '日幣': 'JPY', '日圓': 'JPY' };
-  // findrate.tw table: cols = [幣別, 現鈔買入, 現鈔賣出, 即期買入, 即期賣出]
   var rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
   for (var i = 0; i < rows.length; i++) {
     var cells = rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
@@ -280,11 +259,7 @@ function parseFindRateHtml(html) {
 function fetchTcbRates() {
   return fetchViaProxy(TCB_URL, true).then(function(html) {
     var parsed = parseFindRateHtml(html);
-    if (parsed) { tcbRates = parsed; }
     return parsed;
-  }).catch(function(e) {
-    console.warn('TCB rates failed:', e.message);
-    return null;
   });
 }
 
@@ -389,7 +364,7 @@ function buildFallbackData(usdTwd, eurTwd, jpyTwd) {
       EUR: { spotBuy: eurTwd * 0.984, spotSell: eurTwd },
       JPY: { spotBuy: jpyTwd * 0.988, spotSell: jpyTwd }
     };
-    buildBotData(todayRates, cached);
+    buildRateData(todayRates, cached);
     return;
   }
   // No cache at all — minimal single-point data (no simulated random walk)
@@ -401,7 +376,7 @@ function buildFallbackData(usdTwd, eurTwd, jpyTwd) {
   };
 }
 
-function buildBotData(todayRates, historyMap) {
+function buildRateData(todayRates, historyMap) {
   function makeHist(cur, fallbackRate) {
     // If no historyMap provided, try localStorage cache
     var hmap = historyMap;
@@ -440,7 +415,7 @@ function buildBotData(todayRates, historyMap) {
       EUR: latest.EUR || { spotBuy: 37.225, spotSell: 37.625 },
       JPY: latest.JPY || { spotBuy: 0.2065, spotSell: 0.2095 }
     };
-    buildBotData(todayRates, cache);
+    buildRateData(todayRates, cache);
   } else {
     // No cache: skip rendering until real data arrives — show loading state
     buildFallbackData(31.525, 37.425, 0.2095);
@@ -463,39 +438,30 @@ var refreshTimer = null;
 var nextRefreshAt = 0;
 
 function refreshRates(isAuto) {
-  var label = isAuto ? '自動更新中...' : '正在連線台灣銀行 + 合作金庫取得即時匯率...';
+  var label = isAuto ? '自動更新中...' : '正在連線合作金庫取得即時匯率...';
   showNotice(label, 'info');
-  Promise.all([
-    fetchViaProxy(BOT_TODAY, true),
-    fetchTcbRates()
-  ]).then(function(results) {
-    var text = results[0];
-    var todayRates = parseBotCsv(text);
-    if (!todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
+  fetchTcbRates().then(function(todayRates) {
+    if (!todayRates || !todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
     if (lastHistoryMap) {
-      buildBotData(todayRates, lastHistoryMap);
+      buildRateData(todayRates, lastHistoryMap);
       render();
-      var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
-      showNotice('資料來源：' + sources + ' 牌告匯率（每 5 分鐘自動更新）', 'ok');
+      showNotice('資料來源：合作金庫牌告匯率（每 5 分鐘自動更新）', 'ok');
       setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 3000);
     } else {
-      buildBotData(todayRates, null);
+      buildRateData(todayRates, null);
       render();
-      var tcbStatus = tcbRates ? ' + 合作金庫' : '';
-      showNotice('已取得台銀' + tcbStatus + '即時匯率，正在載入歷史資料...', 'info');
+      showNotice('已取得合庫即時匯率，正在載入歷史資料...', 'info');
       return fetchRatesHistory().then(function(historyMap) {
         lastHistoryMap = historyMap;
         var dayCount = Object.keys(historyMap).length;
-        if (dayCount >= 5) { buildBotData(todayRates, historyMap); render(); }
-        var sources = '台灣銀行' + (tcbRates ? ' + 合作金庫' : '');
-        showNotice('資料來源：' + sources + ' 牌告匯率（' + dayCount + ' 日真實歷史 · 每 5 分鐘自動更新）', 'ok');
+        if (dayCount >= 5) { buildRateData(todayRates, historyMap); render(); }
+        showNotice('資料來源：合作金庫牌告匯率（' + dayCount + ' 日歷史 · 每 5 分鐘自動更新）', 'ok');
         setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
       });
     }
   }).catch(function(e) {
-    console.warn('BOT failed:', e.message);
+    console.warn('TCB failed:', e.message);
     if (isAuto) { showNotice('自動更新失敗，將在 5 分鐘後重試', 'warn'); return; }
-    // Use localStorage cache if available; no third-party fallback
     var cache = loadHistCache();
     var dates = Object.keys(cache).sort();
     if (dates.length >= 5) {
@@ -507,14 +473,14 @@ function refreshRates(isAuto) {
         JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
       };
       if (todayRates.USD.spotSell && todayRates.EUR.spotSell && todayRates.JPY.spotSell) {
-        buildBotData(todayRates, cache);
+        buildRateData(todayRates, cache);
         render();
-        showNotice('無法連線台銀，目前顯示上次快取的牌告匯率（' + latestDate + '）。', 'warn');
+        showNotice('無法連線合庫，目前顯示上次快取的牌告匯率（' + latestDate + '）。', 'warn');
       } else {
-        showNotice('無法連線台灣銀行取得匯率，請稍後再試。', 'warn');
+        showNotice('無法連線合作金庫取得匯率，請稍後再試。', 'warn');
       }
     } else {
-      showNotice('無法連線台灣銀行取得匯率，請檢查網路後重新整理。', 'warn');
+      showNotice('無法連線合作金庫取得匯率，請檢查網路後重新整理。', 'warn');
     }
   }).then(function() {
     // Schedule next refresh
@@ -560,33 +526,9 @@ function renderCard(id, d) {
   var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
   var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
 
-  // TCB comparison
-  var tcbHtml = '';
-  if (tcbRates && tcbRates[d.currency]) {
-    var tcb = tcbRates[d.currency];
-    var botSell = d.spotSell * m;
-    var tcbSell = tcb.spotSell * m;
-    var diff = tcbSell - botSell;
-    var cheaper = diff < -0.0001 ? '合庫' : diff > 0.0001 ? '台銀' : '相同';
-    var diffColor = diff < -0.0001 ? 'var(--buy)' : diff > 0.0001 ? 'var(--buy)' : 'rgba(255,255,255,0.4)';
-    tcbHtml =
-      '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:0.5rem;padding:0.625rem;margin-top:0.75rem">' +
-        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem">' +
-          '<span style="font-size:0.6875rem;color:rgba(255,255,255,0.4)">銀行比價</span>' +
-          '<span style="font-size:0.6875rem;color:'+diffColor+';font-weight:500">'+cheaper+'較便宜</span>' +
-        '</div>' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;font-size:0.75rem">' +
-          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">台銀賣出</span><span style="color:rgba(255,255,255,0.8);font-weight:600">'+botSell.toFixed(dp)+'</span></div>' +
-          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">合庫賣出</span><span style="color:rgba(255,255,255,0.8);font-weight:600">'+tcbSell.toFixed(dp)+'</span></div>' +
-          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">台銀買入</span><span style="color:rgba(255,255,255,0.6)">'+(d.spotBuy*m).toFixed(dp)+'</span></div>' +
-          '<div style="display:flex;justify-content:space-between"><span style="color:rgba(255,255,255,0.5)">合庫買入</span><span style="color:rgba(255,255,255,0.6)">'+(tcb.spotBuy*m).toFixed(dp)+'</span></div>' +
-        '</div>' +
-      '</div>';
-  }
-
   el.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
-      '<div><div class="pair">'+d.pair+'</div><div class="source">台灣銀行牌告</div></div>' +
+      '<div><div class="pair">'+d.pair+'</div><div class="source">合作金庫牌告</div></div>' +
       '<span class="badge badge-'+badgeCls+'"><span class="dot"></span>'+s.label+'</span>' +
     '</div>' +
     '<div style="margin-bottom:0.25rem"><div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.25rem">'+rateLabel+'</div>' +
@@ -601,8 +543,7 @@ function renderCard(id, d) {
       '<div class="stat"><div class="stat-label">SMA20</div><div class="stat-value">'+(d.sma20 ? (d.sma20*m).toFixed(dp) : '-')+'</div><div class="stat-sub" style="color:'+(d.spotSell<d.sma20?'var(--buy)':'var(--sell)')+'">'+( d.sma20 ? (d.spotSell<d.sma20?'▼ 低於':'▲ 高於') : '' )+'</div></div>' +
       '<div class="stat"><div class="stat-label">SMA30</div><div class="stat-value">'+(d.sma30 ? (d.sma30*m).toFixed(dp) : '-')+'</div><div class="stat-sub" style="color:'+(d.spotSell<d.sma30?'var(--buy)':'var(--sell)')+'">'+( d.sma30 ? (d.spotSell<d.sma30?'▼ 低於':'▲ 高於') : '' )+'</div></div>' +
       '<div class="stat"><div class="stat-label">匯差</div><div class="stat-value">'+(d.spread*m).toFixed(dp)+'</div><div class="stat-sub">買入 '+(d.spotBuy*m).toFixed(dp)+'</div></div>' +
-    '</div>' +
-    tcbHtml;
+    '</div>';
 }
 
 // ---- Vault ----
@@ -817,18 +758,6 @@ function addCurrencyInsight(insights, data, nameZh) {
     insights.push({ color:'var(--sell)', text:nameZh+'高於多數均線，匯率偏高（均價 '+(data.avg30d*m).toFixed(dp)+'），建議觀望。' });
   } else {
     insights.push({ color:'var(--accent)', text:nameZh+'位於均線交叉附近，目前無明顯方向性訊號。' });
-  }
-  // Bank comparison insight
-  if (tcbRates && tcbRates[data.currency]) {
-    var botSell = data.spotSell;
-    var tcbSell = tcbRates[data.currency].spotSell;
-    var diff = tcbSell - botSell;
-    if (Math.abs(diff) > 0.0001) {
-      var cheaper = diff > 0 ? '台銀' : '合庫';
-      var savePer = Math.abs(diff);
-      var saveText = isJpy ? '每萬日圓省 NT$'+(savePer*10000).toFixed(0) : '每千元省 NT$'+(savePer*1000).toFixed(1);
-      insights.push({ color:'var(--accent)', text:nameZh+'買入：'+cheaper+'較便宜（價差 '+(isJpy?(savePer*100).toFixed(2):savePer.toFixed(4))+'，'+saveText+'）。' });
-    }
   }
 }
 
