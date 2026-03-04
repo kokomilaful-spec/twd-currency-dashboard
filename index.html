@@ -101,26 +101,155 @@
   .hidden { display: none !important; }
   .mb { margin-bottom: 1.25rem; }
   .row-between { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+
+  /* ===== Skeleton Loading ===== */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 0.5rem;
+  }
+  .skel-line { height: 1rem; margin-bottom: 0.5rem; }
+  .skel-line-sm { height: 0.75rem; margin-bottom: 0.375rem; width: 60%; }
+  .skel-title { height: 1.25rem; width: 50%; margin-bottom: 1rem; }
+  .skel-big { height: 2.5rem; width: 65%; margin-bottom: 0.75rem; }
+  .skel-badge { height: 1.5rem; width: 5rem; border-radius: 9999px; }
+  .skel-stat { height: 3.5rem; border-radius: 0.5rem; }
+  .skel-chart { height: 240px; border-radius: 0.75rem; }
+
+  /* ===== Toast Notifications ===== */
+  .toast-container {
+    position: fixed; top: 1rem; right: 1rem; z-index: 1000;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    pointer-events: none; max-width: 22rem;
+  }
+  @keyframes toast-in { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes toast-out { from { transform: translateX(0); opacity: 1; } to { transform: translateX(120%); opacity: 0; } }
+  .toast {
+    pointer-events: auto;
+    backdrop-filter: blur(16px); border-radius: 0.75rem;
+    padding: 0.75rem 1rem; font-size: 0.8125rem; font-weight: 500;
+    border: 1px solid; display: flex; align-items: center; gap: 0.5rem;
+    animation: toast-in 0.35s ease-out;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .toast.removing { animation: toast-out 0.3s ease-in forwards; }
+  .toast-info { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.3); color: #a5b4fc; }
+  .toast-ok { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.3); color: #86efac; }
+  .toast-warn { background: rgba(249,115,22,0.15); border-color: rgba(249,115,22,0.3); color: #fdba74; }
+
+  /* ===== Auto-refresh Progress Bar ===== */
+  .refresh-bar-wrap {
+    height: 3px; background: rgba(255,255,255,0.04); margin-bottom: 1.5rem; border-radius: 2px; overflow: hidden;
+  }
+  .refresh-bar {
+    height: 100%; width: 0%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), #818cf8);
+    transition: width 1s linear;
+  }
+
+  /* ===== Rate Number Animation ===== */
+  @keyframes rate-flash { 0% { color: var(--accent); } 100% { color: inherit; } }
+  .rate-updated { animation: rate-flash 0.8s ease-out; }
+
+  /* ===== Light/Dark Mode ===== */
+  .theme-toggle {
+    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.6); width: 2.25rem; height: 2.25rem;
+    border-radius: 0.625rem; cursor: pointer; font-size: 1rem;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+  }
+  .theme-toggle:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+  [data-theme="light"] { --bg: #f0f2f5; --card: rgba(255,255,255,0.85); --border: rgba(0,0,0,0.08); }
+  [data-theme="light"] body { background: var(--bg); color: #1a1a2e; }
+  [data-theme="light"] .glass { background: var(--card); border-color: var(--border); box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  [data-theme="light"] .pair { color: #1a1a2e; }
+  [data-theme="light"] .source { color: rgba(0,0,0,0.4); }
+  [data-theme="light"] .big-rate { color: #1a1a2e; }
+  [data-theme="light"] .stat { background: rgba(0,0,0,0.03); }
+  [data-theme="light"] .stat-label { color: rgba(0,0,0,0.45); }
+  [data-theme="light"] .stat-value { color: rgba(0,0,0,0.75); }
+  [data-theme="light"] .stat-sub { color: rgba(0,0,0,0.35); }
+  [data-theme="light"] .header h1 { color: #1a1a2e; }
+  [data-theme="light"] .header p { color: rgba(0,0,0,0.45); }
+  [data-theme="light"] #updated { color: rgba(0,0,0,0.45) !important; }
+  [data-theme="light"] #countdown { color: rgba(0,0,0,0.3) !important; }
+  [data-theme="light"] .btn { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.6); }
+  [data-theme="light"] .btn:hover { background: rgba(0,0,0,0.08); color: #1a1a2e; }
+  [data-theme="light"] .theme-toggle { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.5); }
+  [data-theme="light"] .theme-toggle:hover { background: rgba(0,0,0,0.08); color: #1a1a2e; }
+  [data-theme="light"] .section-title h3 { color: #1a1a2e; }
+  [data-theme="light"] .sub { color: rgba(0,0,0,0.35); }
+  [data-theme="light"] .vault-card { background: rgba(0,0,0,0.02); border-color: rgba(0,0,0,0.06); }
+  [data-theme="light"] .vault-balance { color: #1a1a2e; }
+  [data-theme="light"] .form-input { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.1); color: #1a1a2e; }
+  [data-theme="light"] .form-label { color: rgba(0,0,0,0.5); }
+  [data-theme="light"] .form-input::placeholder { color: rgba(0,0,0,0.25); }
+  [data-theme="light"] .preview { background: rgba(0,0,0,0.03); color: rgba(0,0,0,0.5); }
+  [data-theme="light"] .preview strong { color: rgba(0,0,0,0.8); }
+  [data-theme="light"] .preview .total { color: #1a1a2e; }
+  [data-theme="light"] .history-table th { color: rgba(0,0,0,0.35); border-color: rgba(0,0,0,0.06); }
+  [data-theme="light"] .history-table td { color: rgba(0,0,0,0.6); border-color: rgba(0,0,0,0.04); }
+  [data-theme="light"] .bold { color: rgba(0,0,0,0.8); }
+  [data-theme="light"] .insight-text { color: rgba(0,0,0,0.6); }
+  [data-theme="light"] .verdict p { color: #1a1a2e; }
+  [data-theme="light"] .footer { color: rgba(0,0,0,0.25); }
+  [data-theme="light"] .chart-toolbar button { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.08); color: rgba(0,0,0,0.4); }
+  [data-theme="light"] .chart-toolbar button:hover { background: rgba(0,0,0,0.08); color: rgba(0,0,0,0.7); }
+  [data-theme="light"] .chart-toolbar button.active { background: rgba(99,102,241,0.12); border-color: rgba(99,102,241,0.3); color: var(--accent); }
+  [data-theme="light"] .sma-legend { color: rgba(0,0,0,0.4); }
+  [data-theme="light"] .glow-green { box-shadow: 0 2px 16px rgba(34,197,94,0.08); }
+  [data-theme="light"] .glow-orange { box-shadow: 0 2px 16px rgba(249,115,22,0.08); }
+  [data-theme="light"] .glow-accent { box-shadow: 0 2px 16px rgba(99,102,241,0.08); }
+  [data-theme="light"] .refresh-bar-wrap { background: rgba(0,0,0,0.04); }
+  [data-theme="light"] .skeleton { background: linear-gradient(90deg, rgba(0,0,0,0.04) 25%, rgba(0,0,0,0.08) 50%, rgba(0,0,0,0.04) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+  [data-theme="light"] .btn-del:hover { color: var(--danger); }
+  [data-theme="light"] .pnl-neutral { border-color: rgba(0,0,0,0.08); background: rgba(0,0,0,0.02); color: rgba(0,0,0,0.4); }
+
+  /* ===== Mobile Responsive ===== */
+  @media (max-width: 480px) {
+    body { padding: 1rem 0.625rem; }
+    .big-rate { font-size: 1.875rem; }
+    .header h1 { font-size: 1.25rem; }
+    .header { gap: 0.5rem; }
+    .stat-grid { gap: 0.375rem; }
+    .stat { padding: 0.5rem; }
+    .stat-value { font-size: 0.8125rem; }
+    .rate-card { padding: 1.125rem; }
+    .section { padding: 1.125rem; }
+    .vault-balance { font-size: 1.25rem; }
+    .toast-container { left: 0.5rem; right: 0.5rem; max-width: none; }
+  }
 </style>
 </head>
 <body>
 
-<div class="container">
-  <!-- Notice area (for fallback warning) -->
-  <div id="notice"></div>
+<!-- Toast container -->
+<div class="toast-container" id="toast-container"></div>
 
+<div class="container">
   <!-- Header -->
   <div class="header">
     <div>
       <h1>台幣匯率儀表板</h1>
       <p>即時匯率 · 換匯訊號 · 庫存追蹤</p>
     </div>
-    <div style="display:flex;align-items:center;gap:1rem">
+    <div style="display:flex;align-items:center;gap:0.625rem">
       <span id="updated" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
       <span id="countdown" style="font-size:0.6875rem;color:rgba(255,255,255,0.25)"></span>
+      <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="切換主題">&#9790;</button>
       <button class="btn" onclick="refreshRates(false)">重新整理</button>
     </div>
   </div>
+
+  <!-- Auto-refresh progress bar -->
+  <div class="refresh-bar-wrap"><div class="refresh-bar" id="refresh-bar"></div></div>
 
   <!-- Rate Cards -->
   <div class="grid-3 mb">
@@ -421,16 +550,72 @@ function buildRateData(todayRates, historyMap) {
     buildFallbackData(31.525, 37.425, 0.2095);
   }
 })();
-render();
+render(false);
 
-function showNotice(msg, type) {
-  var colors = {
-    info: 'background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.3);color:var(--accent)',
-    ok: 'background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.3);color:var(--buy)',
-    warn: 'background:rgba(249,115,22,0.1);border-color:rgba(249,115,22,0.3);color:var(--sell)'
-  };
-  document.getElementById('notice').innerHTML = '<div class="notice" style="' + (colors[type] || colors.info) + '">' + msg + '</div>';
+// ============================================================
+// TOAST NOTIFICATION SYSTEM
+// ============================================================
+var toastId = 0;
+function showToast(msg, type, duration) {
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+  var icons = { info: '&#8505;', ok: '&#10003;', warn: '&#9888;' };
+  var id = 'toast-' + (++toastId);
+  var div = document.createElement('div');
+  div.className = 'toast toast-' + (type || 'info');
+  div.id = id;
+  div.innerHTML = '<span>' + (icons[type] || icons.info) + '</span><span>' + msg + '</span>';
+  container.appendChild(div);
+  var ms = duration || (type === 'ok' ? 3000 : type === 'warn' ? 5000 : 4000);
+  setTimeout(function() {
+    div.className += ' removing';
+    setTimeout(function() { if (div.parentNode) div.parentNode.removeChild(div); }, 300);
+  }, ms);
 }
+function showNotice(msg, type) { showToast(msg, type); }
+
+// ============================================================
+// SKELETON LOADING
+// ============================================================
+function renderSkeletons() {
+  var skelCard = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
+    '<div><div class="skeleton skel-title"></div><div class="skeleton skel-line-sm"></div></div>' +
+    '<div class="skeleton skel-badge"></div></div>' +
+    '<div class="skeleton skel-big"></div>' +
+    '<div class="skeleton skel-line" style="width:40%;margin-bottom:1.25rem"></div>' +
+    '<div class="stat-grid">' +
+    '<div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div>' +
+    '<div class="skeleton skel-stat"></div><div class="skeleton skel-stat"></div></div>';
+  document.getElementById('card-usd').innerHTML = skelCard;
+  document.getElementById('card-eur').innerHTML = skelCard;
+  document.getElementById('card-jpy').innerHTML = skelCard;
+}
+renderSkeletons();
+
+// ============================================================
+// THEME TOGGLE (Light/Dark)
+// ============================================================
+function getPreferredTheme() {
+  var saved = localStorage.getItem('twd-theme');
+  if (saved) return saved;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  var btn = document.getElementById('theme-btn');
+  if (btn) btn.innerHTML = theme === 'light' ? '&#9728;' : '&#9790;';
+}
+function toggleTheme() {
+  var current = document.documentElement.getAttribute('data-theme') || 'dark';
+  var next = current === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('twd-theme', next);
+  applyTheme(next);
+  // Re-render charts with correct theme colors
+  if (typeof Chart !== 'undefined') {
+    try { renderCharts(); } catch(e){}
+  }
+}
+applyTheme(getPreferredTheme());
 
 var lastHistoryMap = null; // cache history between refreshes
 var AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
@@ -439,29 +624,27 @@ var nextRefreshAt = 0;
 
 function refreshRates(isAuto) {
   var label = isAuto ? '自動更新中...' : '正在連線合作金庫取得即時匯率...';
-  showNotice(label, 'info');
+  showToast(label, 'info', 6000);
   fetchTcbRates().then(function(todayRates) {
     if (!todayRates || !todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
     if (lastHistoryMap) {
       buildRateData(todayRates, lastHistoryMap);
-      render();
-      showNotice('資料來源：合作金庫牌告匯率（每 5 分鐘自動更新）', 'ok');
-      setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 3000);
+      render(true);
+      showToast('合作金庫牌告匯率已更新', 'ok');
     } else {
       buildRateData(todayRates, null);
-      render();
-      showNotice('已取得合庫即時匯率，正在載入歷史資料...', 'info');
+      render(true);
+      showToast('已取得即時匯率，載入歷史資料中...', 'info', 6000);
       return fetchRatesHistory().then(function(historyMap) {
         lastHistoryMap = historyMap;
         var dayCount = Object.keys(historyMap).length;
-        if (dayCount >= 5) { buildRateData(todayRates, historyMap); render(); }
-        showNotice('資料來源：合作金庫牌告匯率（' + dayCount + ' 日歷史 · 每 5 分鐘自動更新）', 'ok');
-        setTimeout(function() { document.getElementById('notice').innerHTML = ''; }, 5000);
+        if (dayCount >= 5) { buildRateData(todayRates, historyMap); render(false); }
+        showToast('合作金庫 ' + dayCount + ' 日歷史載入完成', 'ok');
       });
     }
   }).catch(function(e) {
     console.warn('TCB failed:', e.message);
-    if (isAuto) { showNotice('自動更新失敗，將在 5 分鐘後重試', 'warn'); return; }
+    if (isAuto) { showToast('自動更新失敗，5 分鐘後重試', 'warn'); return; }
     var cache = loadHistCache();
     var dates = Object.keys(cache).sort();
     if (dates.length >= 5) {
@@ -474,20 +657,32 @@ function refreshRates(isAuto) {
       };
       if (todayRates.USD.spotSell && todayRates.EUR.spotSell && todayRates.JPY.spotSell) {
         buildRateData(todayRates, cache);
-        render();
-        showNotice('無法連線合庫，目前顯示上次快取的牌告匯率（' + latestDate + '）。', 'warn');
+        render(false);
+        showToast('離線模式：顯示 ' + latestDate + ' 快取匯率', 'warn');
       } else {
-        showNotice('無法連線合作金庫取得匯率，請稍後再試。', 'warn');
+        showToast('無法連線合作金庫取得匯率', 'warn');
       }
     } else {
-      showNotice('無法連線合作金庫取得匯率，請檢查網路後重新整理。', 'warn');
+      showToast('無法連線合作金庫，請檢查網路', 'warn');
     }
   }).then(function() {
-    // Schedule next refresh
+    // Schedule next refresh + reset progress bar
     nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function() { refreshRates(true); }, AUTO_REFRESH_MS);
+    resetProgressBar();
   });
+}
+
+function resetProgressBar() {
+  var bar = document.getElementById('refresh-bar');
+  if (!bar) return;
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  // Force reflow then animate
+  bar.offsetHeight;
+  bar.style.transition = 'width ' + (AUTO_REFRESH_MS / 1000) + 's linear';
+  bar.style.width = '100%';
 }
 
 // Initial load
@@ -496,11 +691,11 @@ refreshRates(false);
 // ============================================================
 // RENDER
 // ============================================================
-function render() {
+function render(animate) {
   document.getElementById('updated').textContent = '更新於 ' + new Date().toLocaleString('zh-TW');
-  renderCard('card-usd', appData.usd);
-  renderCard('card-eur', appData.eur);
-  renderCard('card-jpy', appData.jpy);
+  renderCard('card-usd', appData.usd, animate);
+  renderCard('card-eur', appData.eur, animate);
+  renderCard('card-jpy', appData.jpy, animate);
   renderVault();
   renderForm();
   renderInsight();
@@ -510,7 +705,7 @@ function render() {
   }
 }
 
-function renderCard(id, d) {
+function renderCard(id, d, animate) {
   var s = d.signal;
   var isJpy = d.currency === 'JPY';
   var m = isJpy ? 100 : 1;
@@ -525,6 +720,7 @@ function renderCard(id, d) {
   else if (s.level === 2) alertHtml = '<div class="alert-box">省錢機會 — 低於兩條均線</div>';
   var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
   var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
+  var animCls = animate ? ' rate-updated' : '';
 
   el.innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
@@ -532,7 +728,7 @@ function renderCard(id, d) {
       '<span class="badge badge-'+badgeCls+'"><span class="dot"></span>'+s.label+'</span>' +
     '</div>' +
     '<div style="margin-bottom:0.25rem"><div style="font-size:0.75rem;color:rgba(255,255,255,0.4);margin-bottom:0.25rem">'+rateLabel+'</div>' +
-      '<div class="big-rate">'+(d.spotSell*m).toFixed(dp)+'</div></div>' +
+      '<div class="big-rate'+animCls+'">'+(d.spotSell*m).toFixed(dp)+'</div></div>' +
     '<div style="display:flex;align-items:center;gap:0.375rem;margin-bottom:1.25rem">' +
       '<span class="diff '+diffDir+'">'+diffSign+s.diff.toFixed(2)+'%</span>' +
       '<span style="font-size:0.75rem;color:rgba(255,255,255,0.4)">較 30 日均價</span>' +
@@ -684,6 +880,7 @@ function makeSmaDataset(rates, period, color) {
 }
 
 function makeChartCfg(data, color, isJpy) {
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
   var m = isJpy ? 100 : 1;
   var dp = isJpy ? 2 : 4;
   var chartData = data.map(function(d) { return { date: d.date, rate: parseFloat((d.rate * m).toFixed(dp)) }; });
@@ -703,18 +900,35 @@ function makeChartCfg(data, color, isJpy) {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: 'rgba(22,24,34,0.9)', borderColor: 'rgba(255,255,255,0.12)', borderWidth: 1,
-          titleColor: 'rgba(255,255,255,0.5)', bodyColor: '#fff', bodyFont: { weight: 'bold' },
-          filter: function(item) { return item.datasetIndex === 0; },
-          callbacks: { label: function(ctx) { return ctx.parsed.y.toFixed(dp); } }
-        }
+          backgroundColor: isLight ? 'rgba(255,255,255,0.95)' : 'rgba(22,24,34,0.95)',
+          borderColor: isLight ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.15)', borderWidth: 1,
+          titleColor: isLight ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.6)',
+          bodyColor: isLight ? '#1a1a2e' : '#fff', bodyFont: { size: 12 },
+          padding: 10,
+          callbacks: {
+            title: function(items) { return items[0] ? items[0].label : ''; },
+            label: function(ctx) {
+              var names = ['匯率', 'SMA10', 'SMA20', 'SMA30'];
+              var colors = ['#fff', '#f59e0b', '#3b82f6', '#ef4444'];
+              var val = ctx.parsed.y;
+              if (val === null || val === undefined) return null;
+              return names[ctx.datasetIndex] + ': ' + val.toFixed(dp);
+            },
+            labelColor: function(ctx) {
+              var colors = ['rgba(255,255,255,0.8)', '#f59e0b', '#3b82f6', '#ef4444'];
+              return { borderColor: colors[ctx.datasetIndex], backgroundColor: colors[ctx.datasetIndex] };
+            }
+          }
+        },
+        crosshair: false
       },
       scales: {
-        x: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,0.04)' } },
-        y: { ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 }, callback: function(v) { return v.toFixed(isJpy ? 1 : 2); } }, grid: { color: 'rgba(255,255,255,0.04)' } }
+        x: { ticks: { color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' } },
+        y: { ticks: { color: isLight ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.3)', font: { size: 10 }, callback: function(v) { return v.toFixed(isJpy ? 1 : 2); } }, grid: { color: isLight ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.04)' } }
       }
     }
   };
@@ -817,6 +1031,29 @@ setInterval(function() {
   var s = document.createElement('script');
   s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
   s.onload = function(){
+    // Register crosshair plugin
+    var crosshairPlugin = {
+      id: 'crosshairLine',
+      afterDraw: function(chart) {
+        if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {
+          var ctx = chart.ctx;
+          var x = chart.tooltip._active[0].element.x;
+          var topY = chart.scales.y.top;
+          var bottomY = chart.scales.y.bottom;
+          ctx.save();
+          ctx.beginPath();
+          ctx.setLineDash([3, 3]);
+          ctx.moveTo(x, topY);
+          ctx.lineTo(x, bottomY);
+          ctx.lineWidth = 1;
+          var isLt = document.documentElement.getAttribute('data-theme') === 'light';
+          ctx.strokeStyle = isLt ? 'rgba(0,0,0,0.15)' : 'rgba(255,255,255,0.2)';
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+    };
+    Chart.register(crosshairPlugin);
     try { renderCharts(); } catch(e){ console.warn('Charts failed:', e); }
   };
   s.onerror = function(){ console.warn('Chart.js CDN unavailable — charts disabled'); };
