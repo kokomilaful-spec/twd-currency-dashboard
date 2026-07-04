@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npx vite build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/rates/today", "destination": "/api/rates/today" },
+    { "source": "/api/rates/history", "destination": "/api/rates/history" },
+    { "source": "/api/ai/weekly-summary", "destination": "/api/ai/weekly-summary" }
+  ]
+}
