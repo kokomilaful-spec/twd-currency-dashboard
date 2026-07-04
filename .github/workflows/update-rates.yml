@@ -9,7 +9,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
       - name: Fetch TCB rates from findrate.tw and update history
         run: |
           set -e
@@ -27,9 +27,19 @@ jobs:
             exit 0
           fi
 
-          # Parse rates using Python
-          python3 << PYEOF
-          import json, re, sys
+          # Parse rates using Python — env vars used instead of shell expansion inside heredoc
+          DATE="$DATE" FILE="$FILE" python3 << 'PYEOF'
+          import json, os, re, sys
+
+          RATE_RANGES = {
+              "USD": (25, 45),
+              "EUR": (30, 55),
+              "JPY": (0.15, 0.35),
+          }
+
+          def is_valid_rate(currency, buy, sell):
+              r = RATE_RANGES.get(currency)
+              return r and buy > 0 and sell > 0 and buy < sell and r[0] <= sell <= r[1]
 
           with open("/tmp/tcb.html", "r", encoding="utf-8") as f:
               html = f.read()
@@ -53,20 +63,22 @@ jobs:
               try:
                   spot_buy = float(cell_texts[3])
                   spot_sell = float(cell_texts[4])
-                  if spot_buy > 0 and spot_sell > 0:
+                  if is_valid_rate(cur, spot_buy, spot_sell):
                       rates[cur] = {"spotBuy": spot_buy, "spotSell": spot_sell}
-              except:
+                  else:
+                      print(f"Rate out of range for {cur}: buy={spot_buy} sell={spot_sell}, skipping")
+              except (ValueError, IndexError):
                   continue
 
           if not all(c in rates for c in ["USD", "EUR", "JPY"]):
-              print("Incomplete rate data, skipping")
+              print("Incomplete or invalid rate data, skipping")
               sys.exit(0)
 
           for c in ["USD", "EUR", "JPY"]:
               print(f'{c}: {rates[c]["spotBuy"]} / {rates[c]["spotSell"]}')
 
-          date = "$DATE"
-          file_path = "$FILE"
+          date = os.environ["DATE"]
+          file_path = os.environ["FILE"]
 
           with open(file_path, "r") as f:
               data = json.load(f)
