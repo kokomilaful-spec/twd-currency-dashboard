@@ -293,7 +293,7 @@
     </div>
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD（每百圓）</h3>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD</h3>
         <div class="chart-toolbar" id="tb-jpy">
           <button onclick="setChartPeriod('jpy',30)" class="active">30D</button>
           <button onclick="setChartPeriod('jpy',60)">60D</button>
@@ -646,8 +646,8 @@ function render(animate) {
 function renderCard(id, d, animate) {
   var s = d.signal;
   var isJpy = d.currency === 'JPY';
-  var m = isJpy ? 100 : 1;
-  var dp = isJpy ? 2 : 4;
+  var m = 1;
+  var dp = 4;
   var glowCls = s.cls==='buy'?'glow-green':s.cls==='sell'?'glow-orange':'glow-accent';
   var el = document.getElementById(id);
   el.className = 'glass rate-card ' + glowCls;
@@ -657,7 +657,7 @@ function renderCard(id, d, animate) {
   if (s.level === 3) alertHtml = '<div class="alert-box">現在換很划算！低於近期所有平均價</div>';
   else if (s.level === 2) alertHtml = '<div class="alert-box">現在換算划算，低於近期多數平均價</div>';
   var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
-  var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
+  var rateLabel = isJpy ? '即期賣出（每一日圓換台幣）' : '即期賣出（你的買入成本）';
   var animCls = animate ? ' rate-updated' : '';
 
   el.innerHTML =
@@ -914,8 +914,8 @@ function renderInsight() {
   function makeCurrencyCard(data, nameZh, flag) {
     var s = data.signal;
     var isJpy = data.currency === 'JPY';
-    var m = isJpy ? 100 : 1;
-    var dp = isJpy ? 2 : 4;
+    var m = 1;
+    var dp = 4;
     var rate  = data.spotSell * m;
     var min30 = data.min30d * m;
     var max30 = data.max30d * m;
@@ -973,7 +973,7 @@ function renderInsight() {
     '<div class="grid-3">' +
       makeCurrencyCard(u, '美元', '🇺🇸') +
       makeCurrencyCard(e, '歐元', '🇪🇺') +
-      makeCurrencyCard(j, '日幣（每百圓）', '🇯🇵') +
+      makeCurrencyCard(j, '日幣 JPY', '🇯🇵') +
     '</div>';
 }
 
