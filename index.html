@@ -894,61 +894,87 @@ function renderCharts() {
 }
 
 // ---- Insight ----
-function addCurrencyInsight(insights, data, nameZh) {
-  var s = data.signal;
-  var isJpy = data.currency === 'JPY';
-  var m = isJpy ? 100 : 1;
-  var dp = isJpy ? 2 : 4;
-  var rate = (data.spotSell * m).toFixed(dp);
-  var avg = (data.avg30d * m).toFixed(dp);
-  if (s.level === 3) {
-    insights.push({ color:'var(--buy)', text:'【'+nameZh+'】現在換很划算！匯率 '+rate+'，比近期 10天、20天、30天平均都便宜。' });
-  } else if (s.level === 2) {
-    insights.push({ color:'var(--buy)', text:'【'+nameZh+'】現在換算划算。匯率 '+rate+' 低於近期平均（30天均價 '+avg+'）。' });
-  } else if (s.level === -3) {
-    insights.push({ color:'var(--sell)', text:'【'+nameZh+'】現在換比較貴。匯率 '+rate+' 高於所有近期平均，建議等等再換。' });
-  } else if (s.level === -2) {
-    insights.push({ color:'var(--sell)', text:'【'+nameZh+'】匯率偏高。'+rate+' 高於近期多數平均（30天均價 '+avg+'），建議觀望。' });
-  } else {
-    insights.push({ color:'var(--accent)', text:'【'+nameZh+'】匯率普通，沒有特別貴或便宜，可按需求決定。' });
-  }
-}
-
 function renderInsight() {
   var u = appData.usd, e = appData.eur, j = appData.jpy;
-  var insights = [];
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  var textMain   = isLight ? '#1a1a2e' : '#fff';
+  var textMuted  = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+  var textFaint  = isLight ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.22)';
+  var cardBg     = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.035)';
+  var cardBorder = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)';
 
-  addCurrencyInsight(insights, u, '美元');
-  addCurrencyInsight(insights, e, '歐元');
-  addCurrencyInsight(insights, j, '日幣');
-
-  // Quick status row
-  function statusTag(level) {
-    if (level >= 2) return '✅ 划算';
-    if (level <= -2) return '⚠️ 偏貴';
-    return '－ 普通';
+  function simpleDesc(level, diff) {
+    if (level >= 3)  return { text: '現在換很划算', sub: '比最近便宜不少', color: '#22c55e' };
+    if (level >= 2)  return { text: '現在換划算',   sub: '比最近便宜一些', color: '#22c55e' };
+    if (level <= -3) return { text: '現在換偏貴',   sub: '比最近貴不少，建議等等', color: '#f97316' };
+    if (level <= -2) return { text: '現在換略貴',   sub: '比最近貴一些，可以觀望', color: '#f97316' };
+    return { text: '跟平常差不多', sub: '可按需求決定', color: '#6366f1' };
   }
-  insights.push({ color:'rgba(255,255,255,0.4)', text:'快速對照：美元 ' + statusTag(u.signal.level) + ' · 歐元 ' + statusTag(e.signal.level) + ' · 日幣 ' + statusTag(j.signal.level) });
 
-  // Overall verdict based on total SMA score
+  function makeCurrencyCard(data, nameZh, flag) {
+    var s = data.signal;
+    var isJpy = data.currency === 'JPY';
+    var m = isJpy ? 100 : 1;
+    var dp = isJpy ? 2 : 4;
+    var rate  = data.spotSell * m;
+    var min30 = data.min30d * m;
+    var max30 = data.max30d * m;
+    var range = max30 - min30;
+    var pos   = range > 0 ? Math.max(3, Math.min(97, ((rate - min30) / range) * 100)) : 50;
+
+    var desc = simpleDesc(s.level, s.diff);
+    var isBuy  = s.cls === 'buy';
+    var isSell = s.cls === 'sell';
+    var bigIcon = isBuy ? '✅' : isSell ? '⚠️' : '〜';
+    var accentAlpha = isBuy ? 'rgba(34,197,94,' : isSell ? 'rgba(249,115,22,' : 'rgba(99,102,241,';
+
+    return '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-radius:1rem;padding:1.25rem">' +
+      '<div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.875rem">' +
+        '<span style="font-size:1.375rem;line-height:1">' + flag + '</span>' +
+        '<span style="font-size:0.8125rem;font-weight:600;color:' + textMain + '">' + nameZh + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.25rem">' +
+        '<span style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;color:' + textMain + ';letter-spacing:-0.02em">' + bigIcon + '</span>' +
+        '<span style="font-size:1.25rem;font-weight:600;color:' + desc.color + '">' + desc.text + '</span>' +
+      '</div>' +
+      '<div style="font-size:0.8125rem;color:' + textMuted + ';margin-bottom:1.125rem">' + desc.sub + '</div>' +
+      '<div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(to right,#22c55e,#f59e0b 50%,#f97316);margin-bottom:0.5rem;overflow:visible">' +
+        '<div style="position:absolute;top:50%;left:' + pos + '%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.35),0 0 0 2px ' + accentAlpha + '0.5)"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.6875rem;color:' + textFaint + '">' +
+        '<span>← 便宜</span>' +
+        '<span style="font-variant-numeric:tabular-nums;color:' + textMuted + '">今日 ' + rate.toFixed(dp) + '</span>' +
+        '<span>貴 →</span>' +
+      '</div>' +
+    '</div>';
+  }
+
   var totalLevel = [u,e,j].reduce(function(s,d){ return s + d.signal.level; }, 0);
-  var verdict, vCls;
-  if (totalLevel >= 6) { verdict='🎉 三種貨幣現在都很划算！是近期少見的好換匯時機。'; vCls='verdict-buy'; }
-  else if (totalLevel >= 3) { verdict='👍 多數貨幣比近期便宜，今天換匯不錯！'; vCls='verdict-buy'; }
-  else if (totalLevel >= 1) { verdict='🤔 部分貨幣划算，可對照上方卡片按需求決定。'; vCls='verdict-neutral'; }
-  else if (totalLevel >= -2) { verdict='⏸ 匯率目前不貴也不便宜，可以等等看。'; vCls='verdict-neutral'; }
-  else { verdict='⚠️ 三種貨幣現在都偏貴，建議等匯率回落再換。'; vCls='verdict-sell'; }
+  var verdictIcon, verdictText, vCls;
+  if (totalLevel >= 6)       { verdictIcon='🎉'; verdictText='三種貨幣現在都很划算，是近期少見的好時機！';    vCls='verdict-buy'; }
+  else if (totalLevel >= 3)  { verdictIcon='👍'; verdictText='多數貨幣比最近便宜，今天換匯是個好選擇。';     vCls='verdict-buy'; }
+  else if (totalLevel >= 1)  { verdictIcon='🤔'; verdictText='部分貨幣划算，可對照上方各幣別說明再決定。'; vCls='verdict-neutral'; }
+  else if (totalLevel >= -2) { verdictIcon='⏸️'; verdictText='匯率目前不貴也不便宜，等等看也沒關係。';       vCls='verdict-neutral'; }
+  else                       { verdictIcon='⚠️'; verdictText='三種貨幣現在都偏貴，建議等匯率回落再換。';     vCls='verdict-sell'; }
 
   var now = new Date();
   var weekdays = ['日','一','二','三','四','五','六'];
-  var dateStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 星期'+weekdays[now.getDay()];
+  var dateStr = now.getFullYear() + '年' + (now.getMonth()+1) + '月' + now.getDate() + '日（星期' + weekdays[now.getDay()] + '）';
 
   document.getElementById('insight-section').innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">' +
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
       '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10024;</span><h3>今日換匯建議</h3></div>' +
-      '<span style="font-size:0.75rem;color:rgba(255,255,255,0.3)">'+dateStr+'</span></div>' +
-    insights.map(function(i){ return '<div class="insight-row"><span style="color:'+i.color+';font-size:1.125rem;flex-shrink:0;margin-top:2px">&#9679;</span><p class="insight-text">'+i.text+'</p></div>'; }).join('') +
-    '<div class="verdict '+vCls+'"><p>'+verdict+'</p></div>';
+      '<span style="font-size:0.75rem;color:' + textFaint + '">' + dateStr + '</span>' +
+    '</div>' +
+    '<div class="verdict ' + vCls + '" style="margin-bottom:1.25rem;display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem">' +
+      '<span style="font-size:1.75rem;line-height:1;flex-shrink:0">' + verdictIcon + '</span>' +
+      '<p style="font-size:1rem;line-height:1.5">' + verdictText + '</p>' +
+    '</div>' +
+    '<div class="grid-3">' +
+      makeCurrencyCard(u, '美元', '🇺🇸') +
+      makeCurrencyCard(e, '歐元', '🇪🇺') +
+      makeCurrencyCard(j, '日幣（每百圓）', '🇯🇵') +
+    '</div>';
 }
 
 // ---- Countdown timer for auto-refresh ----
