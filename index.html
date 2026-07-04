@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src https://corsproxy.io https://api.allorigins.win https://www.findrate.tw; img-src 'self' data:;">
 <title>台幣匯率儀表板</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -324,6 +325,17 @@ window.onerror = function(msg, src, line) {
 // ============================================================
 var STORAGE_KEY = 'twd-dashboard-exchanges';
 var appData = null;
+
+// Sanity ranges for proxy-fetched live rates — reject anything outside these bounds
+var RATE_RANGES = {
+  USD: { min: 25, max: 45 },
+  EUR: { min: 30, max: 55 },
+  JPY: { min: 0.15, max: 0.35 }
+};
+function isValidRate(currency, buy, sell) {
+  var r = RATE_RANGES[currency];
+  return r && buy > 0 && sell > 0 && buy < sell && sell >= r.min && sell <= r.max;
+}
 var exchanges = [];
 var usdChart = null, eurChart = null, jpyChart = null;
 var chartPeriods = { usd: 30, eur: 30, jpy: 30 };
@@ -378,7 +390,7 @@ function parseFindRateHtml(html) {
     if (!cur || rates[cur]) continue;
     var spotBuy = parseFloat(cellTexts[3]);
     var spotSell = parseFloat(cellTexts[4]);
-    if (!isNaN(spotBuy) && !isNaN(spotSell) && spotBuy > 0 && spotSell > 0) {
+    if (!isNaN(spotBuy) && !isNaN(spotSell) && isValidRate(cur, spotBuy, spotSell)) {
       rates[cur] = { spotBuy: spotBuy, spotSell: spotSell };
     }
   }
@@ -1029,7 +1041,9 @@ setInterval(function() {
 <script>
 (function(){
   var s = document.createElement('script');
-  s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+  s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';
+  s.integrity = 'sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ';
+  s.crossOrigin = 'anonymous';
   s.onload = function(){
     // Register crosshair plugin
     var crosshairPlugin = {
