@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src https://corsproxy.io https://api.allorigins.win https://www.findrate.tw; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <title>台幣匯率儀表板</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -326,16 +326,6 @@ window.onerror = function(msg, src, line) {
 var STORAGE_KEY = 'twd-dashboard-exchanges';
 var appData = null;
 
-// Sanity ranges for proxy-fetched live rates — reject anything outside these bounds
-var RATE_RANGES = {
-  USD: { min: 25, max: 45 },
-  EUR: { min: 30, max: 55 },
-  JPY: { min: 0.15, max: 0.35 }
-};
-function isValidRate(currency, buy, sell) {
-  var r = RATE_RANGES[currency];
-  return r && buy > 0 && sell > 0 && buy < sell && sell >= r.min && sell <= r.max;
-}
 var exchanges = [];
 var usdChart = null, eurChart = null, jpyChart = null;
 var chartPeriods = { usd: 30, eur: 30, jpy: 30 };
@@ -348,62 +338,9 @@ function genId() {
 }
 
 // ============================================================
-// 合作金庫 Data Fetching (CORS Proxy + findrate.tw)
+// 合作金庫匯率資料（來源：GitHub Actions 每日更新的 JSON）
 // ============================================================
 var HIST_CACHE_KEY = 'twd-hist-cache';
-var CORS_PROXIES = [
-  function(u) { return 'https://corsproxy.io/?' + encodeURIComponent(u); },
-  function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
-];
-var TCB_URL = 'https://www.findrate.tw/bank/10/';
-
-function fetchViaProxy(url, bustCache) {
-  var fetchUrl = bustCache ? url + (url.indexOf('?')>=0?'&':'?') + '_t=' + Date.now() : url;
-  var idx = 0;
-  function tryNext() {
-    if (idx >= CORS_PROXIES.length) return Promise.reject(new Error('proxy failed'));
-    var proxyUrl = CORS_PROXIES[idx](fetchUrl);
-    idx++;
-    return fetch(proxyUrl, bustCache ? {cache:'no-store'} : {}).then(function(res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.text();
-    }).then(function(text) {
-      if (!text || text.length < 50) throw new Error('empty');
-      return text;
-    }).catch(function() { return tryNext(); });
-  }
-  return tryNext();
-}
-
-function parseFindRateHtml(html) {
-  var rates = {};
-  var currencyMap = { '美金': 'USD', '歐元': 'EUR', '日幣': 'JPY', '日圓': 'JPY' };
-  var rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-  for (var i = 0; i < rows.length; i++) {
-    var cells = rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
-    if (!cells || cells.length < 5) continue;
-    var cellTexts = cells.map(function(c) { return c.replace(/<[^>]*>/g, '').trim(); });
-    var cur = null;
-    for (var key in currencyMap) {
-      if (cellTexts[0].indexOf(key) >= 0) { cur = currencyMap[key]; break; }
-    }
-    if (!cur || rates[cur]) continue;
-    var spotBuy = parseFloat(cellTexts[3]);
-    var spotSell = parseFloat(cellTexts[4]);
-    if (!isNaN(spotBuy) && !isNaN(spotSell) && isValidRate(cur, spotBuy, spotSell)) {
-      rates[cur] = { spotBuy: spotBuy, spotSell: spotSell };
-    }
-  }
-  return (rates.USD && rates.EUR && rates.JPY) ? rates : null;
-}
-
-function fetchTcbRates() {
-  return fetchViaProxy(TCB_URL, true).then(function(html) {
-    var parsed = parseFindRateHtml(html);
-    return parsed;
-  });
-}
-
 var RATES_JSON_URL = 'data/rates-history.json';
 
 function loadHistCache() {
@@ -635,28 +572,22 @@ var refreshTimer = null;
 var nextRefreshAt = 0;
 
 function refreshRates(isAuto) {
-  var label = isAuto ? '自動更新中...' : '正在連線合作金庫取得即時匯率...';
-  showToast(label, 'info', 6000);
-  fetchTcbRates().then(function(todayRates) {
-    if (!todayRates || !todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
-    if (lastHistoryMap) {
-      buildRateData(todayRates, lastHistoryMap);
-      render(true);
-      showToast('合作金庫牌告匯率已更新', 'ok');
-    } else {
-      buildRateData(todayRates, null);
-      render(true);
-      showToast('已取得即時匯率，載入歷史資料中...', 'info', 6000);
-      return fetchRatesHistory().then(function(historyMap) {
-        lastHistoryMap = historyMap;
-        var dayCount = Object.keys(historyMap).length;
-        if (dayCount >= 5) { buildRateData(todayRates, historyMap); render(false); }
-        showToast('合作金庫 ' + dayCount + ' 日歷史載入完成', 'ok');
-      });
-    }
+  if (!isAuto) showToast('載入最新匯率資料...', 'info', 4000);
+  fetchRatesHistory().then(function(historyMap) {
+    lastHistoryMap = historyMap;
+    var dates = Object.keys(historyMap).sort();
+    var latestDate = dates[dates.length - 1];
+    var latest = historyMap[latestDate];
+    var todayRates = {
+      USD: latest.USD || { spotBuy: 0, spotSell: 0 },
+      EUR: latest.EUR || { spotBuy: 0, spotSell: 0 },
+      JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
+    };
+    buildRateData(todayRates, historyMap);
+    render(true);
+    showToast('已更新（' + latestDate + '，共 ' + dates.length + ' 日資料）', 'ok');
   }).catch(function(e) {
-    console.warn('TCB failed:', e.message);
-    if (isAuto) { showToast('自動更新失敗，5 分鐘後重試', 'warn'); return; }
+    console.warn('fetchRatesHistory failed:', e.message);
     var cache = loadHistCache();
     var dates = Object.keys(cache).sort();
     if (dates.length >= 5) {
@@ -667,18 +598,13 @@ function refreshRates(isAuto) {
         EUR: latest.EUR || { spotBuy: 0, spotSell: 0 },
         JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
       };
-      if (todayRates.USD.spotSell && todayRates.EUR.spotSell && todayRates.JPY.spotSell) {
-        buildRateData(todayRates, cache);
-        render(false);
-        showToast('離線模式：顯示 ' + latestDate + ' 快取匯率', 'warn');
-      } else {
-        showToast('無法連線合作金庫取得匯率', 'warn');
-      }
+      buildRateData(todayRates, cache);
+      render(false);
+      showToast('離線模式：顯示 ' + latestDate + ' 快取匯率', 'warn');
     } else {
-      showToast('無法連線合作金庫，請檢查網路', 'warn');
+      showToast('無法載入匯率資料，請檢查網路', 'warn');
     }
   }).then(function() {
-    // Schedule next refresh + reset progress bar
     nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function() { refreshRates(true); }, AUTO_REFRESH_MS);
