@@ -396,17 +396,17 @@ function getSignal(current, sma10, sma20, sma30) {
   if (sma30 && current < sma30) below++;
   var avgRef = sma30 || sma20 || sma10 || current;
   var diff = avgRef ? ((current - avgRef) / avgRef) * 100 : 0;
-  if (below === 3) return { label:'強力買入', cls:'buy', diff:diff, level:3 };
-  if (below === 2) return { label:'適合買入', cls:'buy', diff:diff, level:2 };
-  if (below === 1) return { label:'持平觀望', cls:'neutral', diff:diff, level:1 };
+  if (below === 3) return { label:'現在很划算', cls:'buy', diff:diff, level:3 };
+  if (below === 2) return { label:'現在划算', cls:'buy', diff:diff, level:2 };
+  if (below === 1) return { label:'普通', cls:'neutral', diff:diff, level:1 };
   // current >= all SMAs
   var above = 0;
   if (sma10 && current > sma10) above++;
   if (sma20 && current > sma20) above++;
   if (sma30 && current > sma30) above++;
-  if (above === 3) return { label:'偏高警示', cls:'sell', diff:diff, level:-3 };
-  if (above >= 2) return { label:'高於均線', cls:'sell', diff:diff, level:-2 };
-  return { label:'持平觀望', cls:'neutral', diff:diff, level:0 };
+  if (above === 3) return { label:'現在偏貴', cls:'sell', diff:diff, level:-3 };
+  if (above >= 2) return { label:'略偏貴', cls:'sell', diff:diff, level:-2 };
+  return { label:'普通', cls:'neutral', diff:diff, level:0 };
 }
 
 function buildCurrencyData(pair, currency, spotSell, spotBuy, history) {
@@ -654,8 +654,8 @@ function renderCard(id, d, animate) {
   var diffDir = s.diff < 0 ? 'down' : 'up';
   var diffSign = s.diff > 0 ? '+' : '';
   var alertHtml = '';
-  if (s.level === 3) alertHtml = '<div class="alert-box">強力買入 — 低於全部三條均線（SMA10/20/30）</div>';
-  else if (s.level === 2) alertHtml = '<div class="alert-box">省錢機會 — 低於兩條均線</div>';
+  if (s.level === 3) alertHtml = '<div class="alert-box">現在換很划算！低於近期所有平均價</div>';
+  else if (s.level === 2) alertHtml = '<div class="alert-box">現在換算划算，低於近期多數平均價</div>';
   var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
   var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
   var animCls = animate ? ' rate-updated' : '';
@@ -899,17 +899,18 @@ function addCurrencyInsight(insights, data, nameZh) {
   var isJpy = data.currency === 'JPY';
   var m = isJpy ? 100 : 1;
   var dp = isJpy ? 2 : 4;
-  // Multi-SMA insight
+  var rate = (data.spotSell * m).toFixed(dp);
+  var avg = (data.avg30d * m).toFixed(dp);
   if (s.level === 3) {
-    insights.push({ color:'var(--buy)', text:nameZh+'低於全部三條均線（SMA10/20/30）——強力買入訊號！目前 '+(data.spotSell*m).toFixed(dp)+' 是近期低點。' });
+    insights.push({ color:'var(--buy)', text:'【'+nameZh+'】現在換很划算！匯率 '+rate+'，比近期 10天、20天、30天平均都便宜。' });
   } else if (s.level === 2) {
-    insights.push({ color:'var(--buy)', text:nameZh+'低於兩條均線，適合買入。即期賣出 '+(data.spotSell*m).toFixed(dp)+' 低於 30 日均價 '+(data.avg30d*m).toFixed(dp)+'。' });
+    insights.push({ color:'var(--buy)', text:'【'+nameZh+'】現在換算划算。匯率 '+rate+' 低於近期平均（30天均價 '+avg+'）。' });
   } else if (s.level === -3) {
-    insights.push({ color:'var(--sell)', text:nameZh+'高於全部三條均線——偏高警示！建議暫緩換匯，等待回落。' });
+    insights.push({ color:'var(--sell)', text:'【'+nameZh+'】現在換比較貴。匯率 '+rate+' 高於所有近期平均，建議等等再換。' });
   } else if (s.level === -2) {
-    insights.push({ color:'var(--sell)', text:nameZh+'高於多數均線，匯率偏高（均價 '+(data.avg30d*m).toFixed(dp)+'），建議觀望。' });
+    insights.push({ color:'var(--sell)', text:'【'+nameZh+'】匯率偏高。'+rate+' 高於近期多數平均（30天均價 '+avg+'），建議觀望。' });
   } else {
-    insights.push({ color:'var(--accent)', text:nameZh+'位於均線交叉附近，目前無明顯方向性訊號。' });
+    insights.push({ color:'var(--accent)', text:'【'+nameZh+'】匯率普通，沒有特別貴或便宜，可按需求決定。' });
   }
 }
 
@@ -921,24 +922,22 @@ function renderInsight() {
   addCurrencyInsight(insights, e, '歐元');
   addCurrencyInsight(insights, j, '日幣');
 
-  // SMA summary row
-  var smaRow = [u,e,j].map(function(d) {
-    var lbl = d.currency;
-    var s10 = d.sma10 ? (d.spotSell < d.sma10 ? '▼' : '▲') : '-';
-    var s20 = d.sma20 ? (d.spotSell < d.sma20 ? '▼' : '▲') : '-';
-    var s30 = d.sma30 ? (d.spotSell < d.sma30 ? '▼' : '▲') : '-';
-    return lbl + ' ' + s10 + '/' + s20 + '/' + s30;
-  }).join(' · ');
-  insights.push({ color:'rgba(255,255,255,0.4)', text:'均線位置（SMA10/20/30）：' + smaRow + '（▼ = 低於均線 = 有利買入）' });
+  // Quick status row
+  function statusTag(level) {
+    if (level >= 2) return '✅ 划算';
+    if (level <= -2) return '⚠️ 偏貴';
+    return '－ 普通';
+  }
+  insights.push({ color:'rgba(255,255,255,0.4)', text:'快速對照：美元 ' + statusTag(u.signal.level) + ' · 歐元 ' + statusTag(e.signal.level) + ' · 日幣 ' + statusTag(j.signal.level) });
 
   // Overall verdict based on total SMA score
   var totalLevel = [u,e,j].reduce(function(s,d){ return s + d.signal.level; }, 0);
   var verdict, vCls;
-  if (totalLevel >= 6) { verdict='三幣別均低於所有均線——絕佳換匯時機，強力建議買入！'; vCls='verdict-buy'; }
-  else if (totalLevel >= 3) { verdict='多數幣別低於均線——今天是換匯的好日子！'; vCls='verdict-buy'; }
-  else if (totalLevel >= 1) { verdict='部分幣別出現買入訊號，請參考上方卡片判斷。'; vCls='verdict-neutral'; }
-  else if (totalLevel >= -2) { verdict='均線訊號中性——建議持續觀望，等待更明確訊號。'; vCls='verdict-neutral'; }
-  else { verdict='多數幣別高於均線——匯率偏高，建議等待回落再換匯。'; vCls='verdict-sell'; }
+  if (totalLevel >= 6) { verdict='🎉 三種貨幣現在都很划算！是近期少見的好換匯時機。'; vCls='verdict-buy'; }
+  else if (totalLevel >= 3) { verdict='👍 多數貨幣比近期便宜，今天換匯不錯！'; vCls='verdict-buy'; }
+  else if (totalLevel >= 1) { verdict='🤔 部分貨幣划算，可對照上方卡片按需求決定。'; vCls='verdict-neutral'; }
+  else if (totalLevel >= -2) { verdict='⏸ 匯率目前不貴也不便宜，可以等等看。'; vCls='verdict-neutral'; }
+  else { verdict='⚠️ 三種貨幣現在都偏貴，建議等匯率回落再換。'; vCls='verdict-sell'; }
 
   var now = new Date();
   var weekdays = ['日','一','二','三','四','五','六'];
@@ -946,7 +945,7 @@ function renderInsight() {
 
   document.getElementById('insight-section').innerHTML =
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">' +
-      '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10024;</span><h3>每日換匯建議</h3></div>' +
+      '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10024;</span><h3>今日換匯建議</h3></div>' +
       '<span style="font-size:0.75rem;color:rgba(255,255,255,0.3)">'+dateStr+'</span></div>' +
     insights.map(function(i){ return '<div class="insight-row"><span style="color:'+i.color+';font-size:1.125rem;flex-shrink:0;margin-top:2px">&#9679;</span><p class="insight-text">'+i.text+'</p></div>'; }).join('') +
     '<div class="verdict '+vCls+'"><p>'+verdict+'</p></div>';
