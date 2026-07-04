@@ -11,30 +11,45 @@ export async function fetchHistory(days = 30) {
 }
 
 export function buildDashboardData(today, history) {
-  const usdHistory = addMAs(
-    history
-      .filter((d) => d.USD)
+  const usdToday = today.rates.USD;
+  const eurToday = today.rates.EUR;
+  const todayDate = today.date;
+
+  const usdHistory = addMAs([
+    ...history
+      .filter((d) => d.USD && d.date !== todayDate)
       .map((d) => ({
         date: formatDate(d.date),
         fullDate: d.date,
         spotSell: d.USD.spotSell,
         spotBuy: d.USD.spotBuy,
-      }))
-  );
+      })),
+    {
+      date: formatDate(todayDate),
+      fullDate: todayDate,
+      spotSell: usdToday.spotSell,
+      spotBuy: usdToday.spotBuy,
+      isToday: true,
+    },
+  ]);
 
-  const eurHistory = addMAs(
-    history
-      .filter((d) => d.EUR)
+  const eurHistory = addMAs([
+    ...history
+      .filter((d) => d.EUR && d.date !== todayDate)
       .map((d) => ({
         date: formatDate(d.date),
         fullDate: d.date,
         spotSell: d.EUR.spotSell,
         spotBuy: d.EUR.spotBuy,
-      }))
-  );
-
-  const usdToday = today.rates.USD;
-  const eurToday = today.rates.EUR;
+      })),
+    {
+      date: formatDate(todayDate),
+      fullDate: todayDate,
+      spotSell: eurToday.spotSell,
+      spotBuy: eurToday.spotBuy,
+      isToday: true,
+    },
+  ]);
 
   const usdAvg = avg(usdHistory.map((d) => d.spotSell));
   const eurAvg = avg(eurHistory.map((d) => d.spotSell));
