@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src https://corsproxy.io https://api.allorigins.win https://www.findrate.tw; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
 <title>台幣匯率儀表板</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -293,7 +293,7 @@
     </div>
     <div class="glass section glow-accent">
       <div class="row-between">
-        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD（每百圓）</h3>
+        <h3 style="font-weight:600;color:rgba(255,255,255,0.9)">JPY / TWD</h3>
         <div class="chart-toolbar" id="tb-jpy">
           <button onclick="setChartPeriod('jpy',30)" class="active">30D</button>
           <button onclick="setChartPeriod('jpy',60)">60D</button>
@@ -326,16 +326,6 @@ window.onerror = function(msg, src, line) {
 var STORAGE_KEY = 'twd-dashboard-exchanges';
 var appData = null;
 
-// Sanity ranges for proxy-fetched live rates — reject anything outside these bounds
-var RATE_RANGES = {
-  USD: { min: 25, max: 45 },
-  EUR: { min: 30, max: 55 },
-  JPY: { min: 0.15, max: 0.35 }
-};
-function isValidRate(currency, buy, sell) {
-  var r = RATE_RANGES[currency];
-  return r && buy > 0 && sell > 0 && buy < sell && sell >= r.min && sell <= r.max;
-}
 var exchanges = [];
 var usdChart = null, eurChart = null, jpyChart = null;
 var chartPeriods = { usd: 30, eur: 30, jpy: 30 };
@@ -348,62 +338,9 @@ function genId() {
 }
 
 // ============================================================
-// 合作金庫 Data Fetching (CORS Proxy + findrate.tw)
+// 合作金庫匯率資料（來源：GitHub Actions 每日更新的 JSON）
 // ============================================================
 var HIST_CACHE_KEY = 'twd-hist-cache';
-var CORS_PROXIES = [
-  function(u) { return 'https://corsproxy.io/?' + encodeURIComponent(u); },
-  function(u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
-];
-var TCB_URL = 'https://www.findrate.tw/bank/10/';
-
-function fetchViaProxy(url, bustCache) {
-  var fetchUrl = bustCache ? url + (url.indexOf('?')>=0?'&':'?') + '_t=' + Date.now() : url;
-  var idx = 0;
-  function tryNext() {
-    if (idx >= CORS_PROXIES.length) return Promise.reject(new Error('proxy failed'));
-    var proxyUrl = CORS_PROXIES[idx](fetchUrl);
-    idx++;
-    return fetch(proxyUrl, bustCache ? {cache:'no-store'} : {}).then(function(res) {
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      return res.text();
-    }).then(function(text) {
-      if (!text || text.length < 50) throw new Error('empty');
-      return text;
-    }).catch(function() { return tryNext(); });
-  }
-  return tryNext();
-}
-
-function parseFindRateHtml(html) {
-  var rates = {};
-  var currencyMap = { '美金': 'USD', '歐元': 'EUR', '日幣': 'JPY', '日圓': 'JPY' };
-  var rows = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
-  for (var i = 0; i < rows.length; i++) {
-    var cells = rows[i].match(/<td[^>]*>([\s\S]*?)<\/td>/gi);
-    if (!cells || cells.length < 5) continue;
-    var cellTexts = cells.map(function(c) { return c.replace(/<[^>]*>/g, '').trim(); });
-    var cur = null;
-    for (var key in currencyMap) {
-      if (cellTexts[0].indexOf(key) >= 0) { cur = currencyMap[key]; break; }
-    }
-    if (!cur || rates[cur]) continue;
-    var spotBuy = parseFloat(cellTexts[3]);
-    var spotSell = parseFloat(cellTexts[4]);
-    if (!isNaN(spotBuy) && !isNaN(spotSell) && isValidRate(cur, spotBuy, spotSell)) {
-      rates[cur] = { spotBuy: spotBuy, spotSell: spotSell };
-    }
-  }
-  return (rates.USD && rates.EUR && rates.JPY) ? rates : null;
-}
-
-function fetchTcbRates() {
-  return fetchViaProxy(TCB_URL, true).then(function(html) {
-    var parsed = parseFindRateHtml(html);
-    return parsed;
-  });
-}
-
 var RATES_JSON_URL = 'data/rates-history.json';
 
 function loadHistCache() {
@@ -459,17 +396,17 @@ function getSignal(current, sma10, sma20, sma30) {
   if (sma30 && current < sma30) below++;
   var avgRef = sma30 || sma20 || sma10 || current;
   var diff = avgRef ? ((current - avgRef) / avgRef) * 100 : 0;
-  if (below === 3) return { label:'強力買入', cls:'buy', diff:diff, level:3 };
-  if (below === 2) return { label:'適合買入', cls:'buy', diff:diff, level:2 };
-  if (below === 1) return { label:'持平觀望', cls:'neutral', diff:diff, level:1 };
+  if (below === 3) return { label:'現在很划算', cls:'buy', diff:diff, level:3 };
+  if (below === 2) return { label:'現在划算', cls:'buy', diff:diff, level:2 };
+  if (below === 1) return { label:'普通', cls:'neutral', diff:diff, level:1 };
   // current >= all SMAs
   var above = 0;
   if (sma10 && current > sma10) above++;
   if (sma20 && current > sma20) above++;
   if (sma30 && current > sma30) above++;
-  if (above === 3) return { label:'偏高警示', cls:'sell', diff:diff, level:-3 };
-  if (above >= 2) return { label:'高於均線', cls:'sell', diff:diff, level:-2 };
-  return { label:'持平觀望', cls:'neutral', diff:diff, level:0 };
+  if (above === 3) return { label:'現在偏貴', cls:'sell', diff:diff, level:-3 };
+  if (above >= 2) return { label:'略偏貴', cls:'sell', diff:diff, level:-2 };
+  return { label:'普通', cls:'neutral', diff:diff, level:0 };
 }
 
 function buildCurrencyData(pair, currency, spotSell, spotBuy, history) {
@@ -630,33 +567,31 @@ function toggleTheme() {
 applyTheme(getPreferredTheme());
 
 var lastHistoryMap = null; // cache history between refreshes
+var lastDataDate = null;   // "2026-07-04" — latest date key in rates-history.json
+var lastDataOffline = false;
 var AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
 var refreshTimer = null;
 var nextRefreshAt = 0;
 
 function refreshRates(isAuto) {
-  var label = isAuto ? '自動更新中...' : '正在連線合作金庫取得即時匯率...';
-  showToast(label, 'info', 6000);
-  fetchTcbRates().then(function(todayRates) {
-    if (!todayRates || !todayRates.USD || !todayRates.EUR || !todayRates.JPY) throw new Error('incomplete');
-    if (lastHistoryMap) {
-      buildRateData(todayRates, lastHistoryMap);
-      render(true);
-      showToast('合作金庫牌告匯率已更新', 'ok');
-    } else {
-      buildRateData(todayRates, null);
-      render(true);
-      showToast('已取得即時匯率，載入歷史資料中...', 'info', 6000);
-      return fetchRatesHistory().then(function(historyMap) {
-        lastHistoryMap = historyMap;
-        var dayCount = Object.keys(historyMap).length;
-        if (dayCount >= 5) { buildRateData(todayRates, historyMap); render(false); }
-        showToast('合作金庫 ' + dayCount + ' 日歷史載入完成', 'ok');
-      });
-    }
+  if (!isAuto) showToast('載入最新匯率資料...', 'info', 4000);
+  fetchRatesHistory().then(function(historyMap) {
+    lastHistoryMap = historyMap;
+    var dates = Object.keys(historyMap).sort();
+    var latestDate = dates[dates.length - 1];
+    lastDataDate = latestDate;
+    lastDataOffline = false;
+    var latest = historyMap[latestDate];
+    var todayRates = {
+      USD: latest.USD || { spotBuy: 0, spotSell: 0 },
+      EUR: latest.EUR || { spotBuy: 0, spotSell: 0 },
+      JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
+    };
+    buildRateData(todayRates, historyMap);
+    render(true);
+    showToast('已更新（' + latestDate + '，共 ' + dates.length + ' 日資料）', 'ok');
   }).catch(function(e) {
-    console.warn('TCB failed:', e.message);
-    if (isAuto) { showToast('自動更新失敗，5 分鐘後重試', 'warn'); return; }
+    console.warn('fetchRatesHistory failed:', e.message);
     var cache = loadHistCache();
     var dates = Object.keys(cache).sort();
     if (dates.length >= 5) {
@@ -667,18 +602,15 @@ function refreshRates(isAuto) {
         EUR: latest.EUR || { spotBuy: 0, spotSell: 0 },
         JPY: latest.JPY || { spotBuy: 0, spotSell: 0 }
       };
-      if (todayRates.USD.spotSell && todayRates.EUR.spotSell && todayRates.JPY.spotSell) {
-        buildRateData(todayRates, cache);
-        render(false);
-        showToast('離線模式：顯示 ' + latestDate + ' 快取匯率', 'warn');
-      } else {
-        showToast('無法連線合作金庫取得匯率', 'warn');
-      }
+      lastDataDate = latestDate;
+      lastDataOffline = true;
+      buildRateData(todayRates, cache);
+      render(false);
+      showToast('離線模式：顯示 ' + latestDate + ' 快取匯率', 'warn');
     } else {
-      showToast('無法連線合作金庫，請檢查網路', 'warn');
+      showToast('無法載入匯率資料，請檢查網路', 'warn');
     }
   }).then(function() {
-    // Schedule next refresh + reset progress bar
     nextRefreshAt = Date.now() + AUTO_REFRESH_MS;
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = setTimeout(function() { refreshRates(true); }, AUTO_REFRESH_MS);
@@ -701,10 +633,41 @@ function resetProgressBar() {
 refreshRates(false);
 
 // ============================================================
+// DATA STATUS HELPERS
+// ============================================================
+function getDataStatusText() {
+  if (!lastDataDate) return '載入中...';
+  var p = lastDataDate.split('-');
+  var mo = +p[1], d = +p[2];
+  var label = mo + '月' + d + '日';
+  if (lastDataOffline) return '離線快取 · ' + label;
+  // Compare data date to Taiwan today (UTC+8)
+  var tw = new Date(Date.now() + 8 * 3600 * 1000);
+  var twMidnight = Date.UTC(tw.getUTCFullYear(), tw.getUTCMonth(), tw.getUTCDate());
+  var dataMidnight = Date.UTC(+p[0], mo - 1, d);
+  var diffDays = Math.round((twMidnight - dataMidnight) / 86400000);
+  var dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+  if (diffDays === 0) return '✓ 今日匯率 · ' + label;
+  if (diffDays === 1) return '匯率資料 · ' + label + '（今日尚未更新）';
+  return '匯率資料 · ' + label + '（週' + dayNames[new Date(dataMidnight).getUTCDay()] + '）';
+}
+
+function getNextUpdateText() {
+  // Taiwan time = UTC+8: add 8h then read UTC methods
+  var tw = new Date(Date.now() + 8 * 3600 * 1000);
+  var h = tw.getUTCHours(), m = tw.getUTCMinutes(), dow = tw.getUTCDay();
+  if (dow === 0 || dow === 6) return '週一 10:30 更新';
+  if (h < 10 || (h === 10 && m < 30)) return '今日 10:30 更新';
+  if (h < 16 || (h === 16 && m < 30)) return '今日 16:30 更新';
+  return (dow === 5 ? '週一' : '明日') + ' 10:30 更新';
+}
+
+// ============================================================
 // RENDER
 // ============================================================
 function render(animate) {
-  document.getElementById('updated').textContent = '更新於 ' + new Date().toLocaleString('zh-TW');
+  document.getElementById('updated').textContent = getDataStatusText();
+  document.getElementById('countdown').textContent = getNextUpdateText();
   renderCard('card-usd', appData.usd, animate);
   renderCard('card-eur', appData.eur, animate);
   renderCard('card-jpy', appData.jpy, animate);
@@ -720,18 +683,18 @@ function render(animate) {
 function renderCard(id, d, animate) {
   var s = d.signal;
   var isJpy = d.currency === 'JPY';
-  var m = isJpy ? 100 : 1;
-  var dp = isJpy ? 2 : 4;
+  var m = 1;
+  var dp = 4;
   var glowCls = s.cls==='buy'?'glow-green':s.cls==='sell'?'glow-orange':'glow-accent';
   var el = document.getElementById(id);
   el.className = 'glass rate-card ' + glowCls;
   var diffDir = s.diff < 0 ? 'down' : 'up';
   var diffSign = s.diff > 0 ? '+' : '';
   var alertHtml = '';
-  if (s.level === 3) alertHtml = '<div class="alert-box">強力買入 — 低於全部三條均線（SMA10/20/30）</div>';
-  else if (s.level === 2) alertHtml = '<div class="alert-box">省錢機會 — 低於兩條均線</div>';
+  if (s.level === 3) alertHtml = '<div class="alert-box">現在換很划算！低於近期所有平均價</div>';
+  else if (s.level === 2) alertHtml = '<div class="alert-box">現在換算划算，低於近期多數平均價</div>';
   var badgeCls = s.level === 3 ? 'strongbuy' : s.level <= -3 ? 'strongsell' : s.cls;
-  var rateLabel = isJpy ? '即期賣出（每百日圓換台幣）' : '即期賣出（你的買入成本）';
+  var rateLabel = isJpy ? '即期賣出（每一日圓換台幣）' : '即期賣出（你的買入成本）';
   var animCls = animate ? ' rate-updated' : '';
 
   el.innerHTML =
@@ -968,73 +931,94 @@ function renderCharts() {
 }
 
 // ---- Insight ----
-function addCurrencyInsight(insights, data, nameZh) {
-  var s = data.signal;
-  var isJpy = data.currency === 'JPY';
-  var m = isJpy ? 100 : 1;
-  var dp = isJpy ? 2 : 4;
-  // Multi-SMA insight
-  if (s.level === 3) {
-    insights.push({ color:'var(--buy)', text:nameZh+'低於全部三條均線（SMA10/20/30）——強力買入訊號！目前 '+(data.spotSell*m).toFixed(dp)+' 是近期低點。' });
-  } else if (s.level === 2) {
-    insights.push({ color:'var(--buy)', text:nameZh+'低於兩條均線，適合買入。即期賣出 '+(data.spotSell*m).toFixed(dp)+' 低於 30 日均價 '+(data.avg30d*m).toFixed(dp)+'。' });
-  } else if (s.level === -3) {
-    insights.push({ color:'var(--sell)', text:nameZh+'高於全部三條均線——偏高警示！建議暫緩換匯，等待回落。' });
-  } else if (s.level === -2) {
-    insights.push({ color:'var(--sell)', text:nameZh+'高於多數均線，匯率偏高（均價 '+(data.avg30d*m).toFixed(dp)+'），建議觀望。' });
-  } else {
-    insights.push({ color:'var(--accent)', text:nameZh+'位於均線交叉附近，目前無明顯方向性訊號。' });
-  }
-}
-
 function renderInsight() {
   var u = appData.usd, e = appData.eur, j = appData.jpy;
-  var insights = [];
+  var isLight = document.documentElement.getAttribute('data-theme') === 'light';
+  var textMain   = isLight ? '#1a1a2e' : '#fff';
+  var textMuted  = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.4)';
+  var textFaint  = isLight ? 'rgba(0,0,0,0.28)' : 'rgba(255,255,255,0.22)';
+  var cardBg     = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.035)';
+  var cardBorder = isLight ? 'rgba(0,0,0,0.07)' : 'rgba(255,255,255,0.07)';
 
-  addCurrencyInsight(insights, u, '美元');
-  addCurrencyInsight(insights, e, '歐元');
-  addCurrencyInsight(insights, j, '日幣');
+  function simpleDesc(level, diff) {
+    if (level >= 3)  return { text: '現在換很划算', sub: '比最近便宜不少', color: '#22c55e' };
+    if (level >= 2)  return { text: '現在換划算',   sub: '比最近便宜一些', color: '#22c55e' };
+    if (level <= -3) return { text: '現在換偏貴',   sub: '比最近貴不少，建議等等', color: '#f97316' };
+    if (level <= -2) return { text: '現在換略貴',   sub: '比最近貴一些，可以觀望', color: '#f97316' };
+    return { text: '跟平常差不多', sub: '可按需求決定', color: '#6366f1' };
+  }
 
-  // SMA summary row
-  var smaRow = [u,e,j].map(function(d) {
-    var lbl = d.currency;
-    var s10 = d.sma10 ? (d.spotSell < d.sma10 ? '▼' : '▲') : '-';
-    var s20 = d.sma20 ? (d.spotSell < d.sma20 ? '▼' : '▲') : '-';
-    var s30 = d.sma30 ? (d.spotSell < d.sma30 ? '▼' : '▲') : '-';
-    return lbl + ' ' + s10 + '/' + s20 + '/' + s30;
-  }).join(' · ');
-  insights.push({ color:'rgba(255,255,255,0.4)', text:'均線位置（SMA10/20/30）：' + smaRow + '（▼ = 低於均線 = 有利買入）' });
+  function makeCurrencyCard(data, nameZh, flag) {
+    var s = data.signal;
+    var isJpy = data.currency === 'JPY';
+    var m = 1;
+    var dp = 4;
+    var rate  = data.spotSell * m;
+    var min30 = data.min30d * m;
+    var max30 = data.max30d * m;
+    var range = max30 - min30;
+    var pos   = range > 0 ? Math.max(3, Math.min(97, ((rate - min30) / range) * 100)) : 50;
 
-  // Overall verdict based on total SMA score
+    var desc = simpleDesc(s.level, s.diff);
+    var isBuy  = s.cls === 'buy';
+    var isSell = s.cls === 'sell';
+    var bigIcon = isBuy ? '✅' : isSell ? '⚠️' : '〜';
+    var accentAlpha = isBuy ? 'rgba(34,197,94,' : isSell ? 'rgba(249,115,22,' : 'rgba(99,102,241,';
+
+    return '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-radius:1rem;padding:1.25rem">' +
+      '<div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:0.875rem">' +
+        '<span style="font-size:1.375rem;line-height:1">' + flag + '</span>' +
+        '<span style="font-size:0.8125rem;font-weight:600;color:' + textMain + '">' + nameZh + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:baseline;gap:0.5rem;margin-bottom:0.25rem">' +
+        '<span style="font-size:2rem;font-weight:700;font-variant-numeric:tabular-nums;color:' + textMain + ';letter-spacing:-0.02em">' + bigIcon + '</span>' +
+        '<span style="font-size:1.25rem;font-weight:600;color:' + desc.color + '">' + desc.text + '</span>' +
+      '</div>' +
+      '<div style="font-size:0.8125rem;color:' + textMuted + ';margin-bottom:1.125rem">' + desc.sub + '</div>' +
+      '<div style="position:relative;height:6px;border-radius:3px;background:linear-gradient(to right,#22c55e,#f59e0b 50%,#f97316);margin-bottom:0.5rem;overflow:visible">' +
+        '<div style="position:absolute;top:50%;left:' + pos + '%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.35),0 0 0 2px ' + accentAlpha + '0.5)"></div>' +
+      '</div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:0.6875rem;color:' + textFaint + '">' +
+        '<span>← 便宜</span>' +
+        '<span style="font-variant-numeric:tabular-nums;color:' + textMuted + '">今日 ' + rate.toFixed(dp) + '</span>' +
+        '<span>貴 →</span>' +
+      '</div>' +
+    '</div>';
+  }
+
   var totalLevel = [u,e,j].reduce(function(s,d){ return s + d.signal.level; }, 0);
-  var verdict, vCls;
-  if (totalLevel >= 6) { verdict='三幣別均低於所有均線——絕佳換匯時機，強力建議買入！'; vCls='verdict-buy'; }
-  else if (totalLevel >= 3) { verdict='多數幣別低於均線——今天是換匯的好日子！'; vCls='verdict-buy'; }
-  else if (totalLevel >= 1) { verdict='部分幣別出現買入訊號，請參考上方卡片判斷。'; vCls='verdict-neutral'; }
-  else if (totalLevel >= -2) { verdict='均線訊號中性——建議持續觀望，等待更明確訊號。'; vCls='verdict-neutral'; }
-  else { verdict='多數幣別高於均線——匯率偏高，建議等待回落再換匯。'; vCls='verdict-sell'; }
+  var verdictIcon, verdictText, vCls;
+  if (totalLevel >= 6)       { verdictIcon='🎉'; verdictText='三種貨幣現在都很划算，是近期少見的好時機！';    vCls='verdict-buy'; }
+  else if (totalLevel >= 3)  { verdictIcon='👍'; verdictText='多數貨幣比最近便宜，今天換匯是個好選擇。';     vCls='verdict-buy'; }
+  else if (totalLevel >= 1)  { verdictIcon='🤔'; verdictText='部分貨幣划算，可對照上方各幣別說明再決定。'; vCls='verdict-neutral'; }
+  else if (totalLevel >= -2) { verdictIcon='⏸️'; verdictText='匯率目前不貴也不便宜，等等看也沒關係。';       vCls='verdict-neutral'; }
+  else                       { verdictIcon='⚠️'; verdictText='三種貨幣現在都偏貴，建議等匯率回落再換。';     vCls='verdict-sell'; }
 
   var now = new Date();
   var weekdays = ['日','一','二','三','四','五','六'];
-  var dateStr = now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 星期'+weekdays[now.getDay()];
+  var dateStr = now.getFullYear() + '年' + (now.getMonth()+1) + '月' + now.getDate() + '日（星期' + weekdays[now.getDay()] + '）';
 
   document.getElementById('insight-section').innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">' +
-      '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10024;</span><h3>每日換匯建議</h3></div>' +
-      '<span style="font-size:0.75rem;color:rgba(255,255,255,0.3)">'+dateStr+'</span></div>' +
-    insights.map(function(i){ return '<div class="insight-row"><span style="color:'+i.color+';font-size:1.125rem;flex-shrink:0;margin-top:2px">&#9679;</span><p class="insight-text">'+i.text+'</p></div>'; }).join('') +
-    '<div class="verdict '+vCls+'"><p>'+verdict+'</p></div>';
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">' +
+      '<div class="section-title" style="margin-bottom:0"><span style="font-size:1.25rem">&#10024;</span><h3>今日換匯建議</h3></div>' +
+      '<span style="font-size:0.75rem;color:' + textFaint + '">' + dateStr + '</span>' +
+    '</div>' +
+    '<div class="verdict ' + vCls + '" style="margin-bottom:1.25rem;display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem">' +
+      '<span style="font-size:1.75rem;line-height:1;flex-shrink:0">' + verdictIcon + '</span>' +
+      '<p style="font-size:1rem;line-height:1.5">' + verdictText + '</p>' +
+    '</div>' +
+    '<div class="grid-3">' +
+      makeCurrencyCard(u, '美元', '🇺🇸') +
+      makeCurrencyCard(e, '歐元', '🇪🇺') +
+      makeCurrencyCard(j, '日幣 JPY', '🇯🇵') +
+    '</div>';
 }
 
-// ---- Countdown timer for auto-refresh ----
+// ---- Update next-scheduled-update text every minute ----
 setInterval(function() {
   var el = document.getElementById('countdown');
-  if (!el || !nextRefreshAt) return;
-  var secs = Math.max(0, Math.round((nextRefreshAt - Date.now()) / 1000));
-  var m = Math.floor(secs / 60);
-  var s = secs % 60;
-  el.textContent = m + ':' + (s < 10 ? '0' : '') + s + ' 後更新';
-}, 1000);
+  if (el) el.textContent = getNextUpdateText();
+}, 60000);
 </script>
 
 <!-- Chart.js: loaded AFTER page renders, so page works even if CDN fails -->
