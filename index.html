@@ -653,7 +653,7 @@ function getDataStatusText() {
 }
 
 function getNextUpdateText() {
-  // Taiwan time = UTC+8: add 8h then read UTC methods
+  // Taiwan time = UTC+8: add 8h then read with UTC methods
   var tw = new Date(Date.now() + 8 * 3600 * 1000);
   var h = tw.getUTCHours(), m = tw.getUTCMinutes(), dow = tw.getUTCDay();
   if (dow === 0 || dow === 6) return '週一 10:30 更新';
@@ -1014,7 +1014,7 @@ function renderInsight() {
     '</div>';
 }
 
-// ---- Update next-scheduled-update text every minute ----
+// ---- Refresh next-scheduled-update text every minute ----
 setInterval(function() {
   var el = document.getElementById('countdown');
   if (el) el.textContent = getNextUpdateText();
