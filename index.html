@@ -655,11 +655,10 @@ function getDataStatusText() {
 function getNextUpdateText() {
   // Taiwan time = UTC+8: add 8h then read with UTC methods
   var tw = new Date(Date.now() + 8 * 3600 * 1000);
-  var h = tw.getUTCHours(), m = tw.getUTCMinutes(), dow = tw.getUTCDay();
-  if (dow === 0 || dow === 6) return '週一 10:30 更新';
+  var h = tw.getUTCHours(), m = tw.getUTCMinutes();
   if (h < 10 || (h === 10 && m < 30)) return '今日 10:30 更新';
   if (h < 16 || (h === 16 && m < 30)) return '今日 16:30 更新';
-  return (dow === 5 ? '週一' : '明日') + ' 10:30 更新';
+  return '明日 10:30 更新';
 }
 
 // ============================================================
