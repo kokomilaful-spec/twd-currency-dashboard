@@ -341,7 +341,7 @@ function genId() {
 // 合作金庫匯率資料（來源：GitHub Actions 每日更新的 JSON）
 // ============================================================
 var HIST_CACHE_KEY = 'twd-hist-cache';
-var RATES_JSON_URL = 'data/rates-history.json?_=' + Date.now();
+var RATES_JSON_URL = 'data/rates-history.json';
 
 function loadHistCache() {
   try { return JSON.parse(localStorage.getItem(HIST_CACHE_KEY) || '{}'); } catch(e) { return {}; }
