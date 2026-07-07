@@ -631,12 +631,14 @@ function getDataStatusText() {
 }
 
 function getNextUpdateText() {
-  // Taiwan time = UTC+8: add 8h then read with UTC methods
+  // Taiwan time = UTC+8: next whole hour
   var tw = new Date(Date.now() + 8 * 3600 * 1000);
   var h = tw.getUTCHours(), m = tw.getUTCMinutes();
-  if (h < 10 || (h === 10 && m < 30)) return '今日 10:30 更新';
-  if (h < 16 || (h === 16 && m < 30)) return '今日 16:30 更新';
-  return '明日 10:30 更新';
+  if (m === 0) return '每小時更新';
+  var nextH = (h + 1) % 24;
+  var suffix = nextH < 12 ? '上午' : '下午';
+  var display = nextH % 12 || 12;
+  return (nextH === 0 ? '明日 00:00' : suffix + ' ' + display + ':00') + ' 更新';
 }
 
 // ============================================================
