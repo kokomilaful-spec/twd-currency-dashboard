@@ -308,6 +308,11 @@
   <div class="footer">資料來源：合作金庫牌告匯率 · 僅供參考，非投資建議</div>
 </div>
 
+<!-- MSAL: Microsoft Authentication Library — must load before main script -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"
+  integrity="sha384-B5PXeUfgiegchZiX5iMRssMrHd9NfPhFnITob1HyW1CY76udptWpBsniaDsH/+BY"
+  crossorigin="anonymous"></script>
+
 <script>
 // ============================================================
 // Global error handler — always show something useful
@@ -1171,11 +1176,6 @@ function renderAuthUI() {
 // Init MSAL after page load
 initMsal();
 </script>
-
-<!-- MSAL: Microsoft Authentication Library -->
-<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"
-  integrity="sha384-B5PXeUfgiegchZiX5iMRssMrHd9NfPhFnITob1HyW1CY76udptWpBsniaDsH/+BY"
-  crossorigin="anonymous"></script>
 
 <!-- Chart.js: loaded AFTER page renders, so page works even if CDN fails -->
 <script>
