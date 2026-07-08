@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://graph.microsoft.com https://login.microsoftonline.com; frame-src https://login.microsoftonline.com;">
 <title>台幣匯率儀表板</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,6 +25,11 @@
   .header p { font-size: 0.875rem; color: rgba(255,255,255,0.5); }
   .btn { background: var(--card); border: 1px solid var(--border); color: rgba(255,255,255,0.7); padding: 0.5rem 1rem; border-radius: 0.75rem; cursor: pointer; font-size: 0.875rem; transition: all 0.2s; }
   .btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  .btn-ms { background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.35); color: #a5b4fc; }
+  .btn-ms:hover { background: rgba(99,102,241,0.25); color: #c7d2fe; }
+  .od-status { font-size: 0.6875rem; color: rgba(255,255,255,0.35); white-space: nowrap; }
+  .od-status.ok { color: rgba(34,197,94,0.7); }
+  .od-status.err { color: rgba(249,115,22,0.8); }
   .rate-card { padding: 1.5rem; }
   .pair { font-size: 1.125rem; font-weight: 600; color: rgba(255,255,255,0.9); }
   .source { font-size: 0.6875rem; color: rgba(255,255,255,0.35); }
@@ -235,6 +240,8 @@
     <div style="display:flex;align-items:center;gap:0.625rem">
       <span id="updated" style="font-size:0.75rem;color:rgba(255,255,255,0.4)"></span>
       <span id="countdown" style="font-size:0.6875rem;color:rgba(255,255,255,0.25)"></span>
+      <span id="od-status-el" class="od-status"></span>
+      <span id="auth-btn-area"></span>
       <button class="theme-toggle" onclick="toggleTheme()" id="theme-btn" title="切換主題">&#9790;</button>
       <button class="btn" onclick="refreshRates(false)">重新整理</button>
     </div>
@@ -780,14 +787,18 @@ function addRecord() {
   var amt = parseFloat(document.getElementById('f-amount').value);
   var rate = parseFloat(document.getElementById('f-rate').value);
   if (!amt || amt <= 0 || !rate || rate <= 0) return;
-  exchanges.push({ id:genId(), date:date, currency:currency, amountForeign:amt, rate:rate, twdSpent:amt*rate, createdAt:new Date().toISOString() });
+  var rec = { id:genId(), date:date, currency:currency, amountForeign:amt, rate:rate, twdSpent:amt*rate, createdAt:new Date().toISOString() };
+  exchanges.push(rec);
   saveExchanges();
+  odAddRow(rec);
   renderVault(); renderForm(); renderInsight();
 }
 
 function deleteRecord(id) {
   exchanges = exchanges.filter(function(r){ return r.id !== id; });
-  saveExchanges(); renderVault(); renderForm(); renderInsight();
+  saveExchanges();
+  odDeleteRow(id);
+  renderVault(); renderForm(); renderInsight();
 }
 
 function toggleHistory() {
@@ -998,7 +1009,173 @@ setInterval(function() {
   var el = document.getElementById('countdown');
   if (el) el.textContent = getNextUpdateText();
 }, 60000);
+
+// ============================================================
+// MICROSOFT ONEDRIVE INTEGRATION (MSAL + Graph API)
+// ============================================================
+var OD_CLIENT_ID  = '470aef62-9eb5-4946-a925-bbe30af7c76a';
+var OD_TENANT_ID  = '153f8294-a5fa-4dd5-bf73-62c8b867bf58';
+var OD_REDIRECT   = 'https://kokomilaful-spec.github.io/twd-currency-dashboard/';
+var OD_SCOPES     = ['Files.ReadWrite', 'User.Read'];
+var OD_FILENAME   = '台幣換匯紀錄.xlsx';
+var OD_TABLE      = '換匯紀錄表';
+
+// Minimal XLSX template (openpyxl, sheet "換匯紀錄", table "換匯紀錄表", 7 header cols)
+var OD_XLSX_B64 = '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';
+
+var msalApp   = null;
+var odAccount = null;
+var odDriveId = null;
+var odItemId  = null;
+var odReady   = false; // true once findOrCreateExcel() succeeded
+
+function initMsal() {
+  if (typeof msal === 'undefined') { console.warn('MSAL not loaded'); return; }
+  msalApp = new msal.PublicClientApplication({
+    auth: { clientId: OD_CLIENT_ID, authority: 'https://login.microsoftonline.com/' + OD_TENANT_ID, redirectUri: OD_REDIRECT },
+    cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
+  });
+  msalApp.handleRedirectPromise().then(function(resp) {
+    if (resp) { odAccount = resp.account; msalApp.setActiveAccount(odAccount); }
+    else {
+      var accs = msalApp.getAllAccounts();
+      if (accs.length) { odAccount = accs[0]; msalApp.setActiveAccount(odAccount); }
+    }
+    renderAuthUI();
+    if (odAccount) odLoadAll();
+  }).catch(function(e) { console.error('MSAL init:', e); renderAuthUI(); });
+}
+
+function odLogin()  { if (msalApp) msalApp.loginRedirect({ scopes: OD_SCOPES }); }
+function odLogout() {
+  if (!msalApp || !odAccount) return;
+  odAccount = null; odDriveId = null; odItemId = null; odReady = false;
+  msalApp.logoutRedirect();
+}
+
+function odGetToken() {
+  if (!msalApp || !odAccount) return Promise.reject(new Error('not logged in'));
+  return msalApp.acquireTokenSilent({ scopes: OD_SCOPES, account: odAccount })
+    .then(function(r) { return r.accessToken; })
+    .catch(function() {
+      return msalApp.acquireTokenPopup({ scopes: OD_SCOPES }).then(function(r) { return r.accessToken; });
+    });
+}
+
+function gFetch(method, path, body) {
+  return odGetToken().then(function(tok) {
+    var opts = { method: method, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    return fetch('https://graph.microsoft.com/v1.0' + path, opts);
+  }).then(function(res) {
+    if (res.status === 204) return null;
+    return res.json().then(function(d) {
+      if (!res.ok) throw new Error('Graph ' + res.status + ': ' + (d.error && d.error.message));
+      return d;
+    });
+  });
+}
+
+function b64ToBytes(b64) {
+  var bin = atob(b64), buf = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+  return buf;
+}
+
+function odEnsureFile() {
+  if (odReady) return Promise.resolve();
+  // 1. Check shared with me
+  return gFetch('GET', '/me/drive/sharedWithMe?$top=50&$select=name,id,parentReference')
+    .then(function(d) {
+      var f = (d.value||[]).find(function(x){ return x.name === OD_FILENAME; });
+      if (f) { odDriveId = f.parentReference.driveId; odItemId = f.id; odReady = true; return; }
+      // 2. Check own root
+      return gFetch('GET', '/me/drive/root:/' + encodeURIComponent(OD_FILENAME))
+        .then(function(item) { odDriveId = item.parentReference.driveId; odItemId = item.id; odReady = true; })
+        .catch(function(e) {
+          if (e.message.indexOf('404') === -1 && e.message.indexOf('itemNotFound') === -1) throw e;
+          // 3. Create new file from template
+          return odGetToken().then(function(tok) {
+            return fetch('https://graph.microsoft.com/v1.0/me/drive/root:/' + encodeURIComponent(OD_FILENAME) + ':/content', {
+              method: 'PUT',
+              headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+              body: b64ToBytes(OD_XLSX_B64)
+            }).then(function(r) { return r.json(); })
+              .then(function(item) { odDriveId = item.parentReference.driveId; odItemId = item.id; odReady = true; });
+          });
+        });
+    });
+}
+
+function odBase() { return '/drives/' + odDriveId + '/items/' + odItemId; }
+function odTable() { return odBase() + '/workbook/tables/' + encodeURIComponent(OD_TABLE); }
+
+function odSetStatus(state, msg) {
+  var el = document.getElementById('od-status-el');
+  if (!el) return;
+  el.className = 'od-status' + (state === 'ok' ? ' ok' : state === 'err' ? ' err' : '');
+  el.textContent = msg;
+}
+
+function odLoadAll() {
+  odSetStatus('', '⏳ 讀取 OneDrive...');
+  odEnsureFile()
+    .then(function() { return gFetch('GET', odTable() + '/rows'); })
+    .then(function(d) {
+      var rows = (d.value || []).map(function(r) {
+        var v = r.values[0];
+        return { date:v[0]||'', currency:v[1]||'', amountForeign:+v[2]||0, rate:+v[3]||0, twdSpent:+v[4]||0, id:v[5]||genId(), createdAt:v[6]||'' };
+      });
+      exchanges = rows;
+      saveExchanges();
+      odSetStatus('ok', '✓ OneDrive');
+      renderVault(); renderForm(); renderInsight();
+    })
+    .catch(function(e) { console.error('odLoadAll:', e); odSetStatus('err', '⚠ 讀取失敗'); });
+}
+
+function odAddRow(rec) {
+  if (!odAccount) return;
+  odEnsureFile()
+    .then(function() {
+      return gFetch('POST', odTable() + '/rows/add', { values: [[rec.date, rec.currency, rec.amountForeign, rec.rate, rec.twdSpent, rec.id, rec.createdAt]] });
+    })
+    .then(function() { odSetStatus('ok', '✓ OneDrive'); })
+    .catch(function(e) { console.error('odAddRow:', e); odSetStatus('err', '⚠ 同步失敗'); });
+}
+
+function odDeleteRow(id) {
+  if (!odAccount) return;
+  odEnsureFile()
+    .then(function() { return gFetch('GET', odTable() + '/rows'); })
+    .then(function(d) {
+      var idx = (d.value||[]).findIndex(function(r) { return r.values[0][5] === id; });
+      if (idx < 0) return;
+      return gFetch('DELETE', odTable() + '/rows/itemAt(index=' + idx + ')');
+    })
+    .then(function() { odSetStatus('ok', '✓ OneDrive'); })
+    .catch(function(e) { console.error('odDeleteRow:', e); odSetStatus('err', '⚠ 同步失敗'); });
+}
+
+function renderAuthUI() {
+  var el = document.getElementById('auth-btn-area');
+  if (!el || !msalApp) return;
+  if (odAccount) {
+    var name = (odAccount.name || odAccount.username || '').split('@')[0];
+    el.innerHTML = '<span style="font-size:0.75rem;color:rgba(255,255,255,0.5)">' + name + '</span><button class="btn" onclick="odLogout()">登出</button>';
+  } else {
+    el.innerHTML = '<button class="btn btn-ms" onclick="odLogin()">登入 Microsoft</button>';
+  }
+}
+
+// Init MSAL after page load
+initMsal();
 </script>
+
+<!-- MSAL: Microsoft Authentication Library -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/lib/msal-browser.min.js"
+  integrity="sha384-B5PXeUfgiegchZiX5iMRssMrHd9NfPhFnITob1HyW1CY76udptWpBsniaDsH/+BY"
+  crossorigin="anonymous"></script>
 
 <!-- Chart.js: loaded AFTER page renders, so page works even if CDN fails -->
 <script>
