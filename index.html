@@ -1040,7 +1040,10 @@ function initMsal() {
     auth: { clientId: OD_CLIENT_ID, authority: 'https://login.microsoftonline.com/' + OD_TENANT_ID, redirectUri: OD_REDIRECT },
     cache: { cacheLocation: 'localStorage', storeAuthStateInCookie: true }
   });
-  msalApp.handleRedirectPromise().then(function(resp) {
+  // MSAL Browser v3 requires initialize() before any interactive call
+  msalApp.initialize().then(function() {
+    return msalApp.handleRedirectPromise();
+  }).then(function(resp) {
     if (resp) { odAccount = resp.account; msalApp.setActiveAccount(odAccount); }
     else {
       var accs = msalApp.getAllAccounts();
