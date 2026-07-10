@@ -332,8 +332,35 @@ var exchanges = [];
 var usdChart = null, eurChart = null, jpyChart = null;
 var chartPeriods = { usd: 30, eur: 30, jpy: 30 };
 
-try { exchanges = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { exchanges = []; }
+try { exchanges = sanitizeRecords(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')); } catch(e) { exchanges = []; }
 function saveExchanges() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(exchanges)); } catch(e){} }
+
+// Records loaded from the shared OneDrive file (or localStorage) are untrusted
+// input rendered via innerHTML — coerce every field to a safe type/charset.
+function sanitizeRecords(arr) {
+  if (!Array.isArray(arr)) return [];
+  var CURRENCIES = { USD:1, EUR:1, JPY:1 };
+  var out = [];
+  for (var i = 0; i < arr.length; i++) {
+    var r = arr[i] || {};
+    var amt  = parseFloat(r.amountForeign);
+    var rate = parseFloat(r.rate);
+    var twd  = parseFloat(r.twdSpent);
+    if (!CURRENCIES[r.currency]) continue;
+    if (!isFinite(amt) || amt <= 0 || !isFinite(rate) || rate <= 0) continue;
+    if (typeof r.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) continue;
+    out.push({
+      id: (typeof r.id === 'string' && /^[a-z0-9]{1,32}$/i.test(r.id)) ? r.id : genId(),
+      date: r.date,
+      currency: r.currency,
+      amountForeign: amt,
+      rate: rate,
+      twdSpent: isFinite(twd) && twd > 0 ? twd : amt * rate,
+      createdAt: (typeof r.createdAt === 'string' && /^[\d\-T:.Z]{0,30}$/.test(r.createdAt)) ? r.createdAt : ''
+    });
+  }
+  return out;
+}
 
 function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -1130,7 +1157,7 @@ function odLoadAll() {
         .then(function(r) { return r.json(); });
     });
   }).then(function(data) {
-    exchanges = Array.isArray(data) ? data : [];
+    exchanges = sanitizeRecords(data);
     saveExchanges();
     odSetStatus('ok', '✓ OneDrive');
     renderVault(); renderForm(); renderInsight();
@@ -1168,7 +1195,8 @@ function renderAuthUI() {
   var el = document.getElementById('auth-btn-area');
   if (!el || !msalApp) return;
   if (odAccount) {
-    var name = (odAccount.name || odAccount.username || '').split('@')[0];
+    var name = (odAccount.name || odAccount.username || '').split('@')[0]
+      .replace(/[<>&"']/g, '');  // display name is attacker-influenced; keep it inert in innerHTML
     el.innerHTML = '<span style="font-size:0.75rem;color:rgba(255,255,255,0.5)">' + name + '</span> <button class="btn" onclick="odLogout()">登出</button>';
   } else {
     el.innerHTML = '<button class="btn btn-ms" onclick="odLogin()">登入 Microsoft</button>';
