@@ -493,8 +493,11 @@ function buildRateData(todayRates, historyMap) {
     }
     if (!hmap) return [{ date: (new Date().getMonth()+1)+'/'+(new Date().getDate()), rate: fallbackRate }];
     var dates = Object.keys(hmap).sort();
-    var last90 = dates.slice(-90); // Keep 90 days for SMA + period toggle
-    return last90.map(function(dateStr) {
+    // Keep all available history (up to 120d) as SMA lead-in buffer — 90D is
+    // the widest period toggle and SMA30 needs 29 extra days before that to
+    // avoid the line truncating at the start of the visible window.
+    var last120 = dates.slice(-120);
+    return last120.map(function(dateStr) {
       var d = new Date(dateStr);
       var entry = hmap[dateStr];
       return { date: (d.getMonth()+1) + '/' + d.getDate(), rate: entry[cur] ? entry[cur].spotSell : 0 };
@@ -863,26 +866,35 @@ function setChartPeriod(cur, days) {
   if (typeof Chart !== 'undefined') renderSingleChart(cur);
 }
 
-function sliceHistory(hist, days) {
-  return hist.length > days ? hist.slice(-days) : hist;
-}
-
-function makeSmaDataset(rates, period, color) {
-  var sma = calcSma(rates, period);
+function makeSmaDataset(values, color) {
   return {
-    data: sma, borderColor: color, borderWidth: 1.5,
+    data: values, borderColor: color, borderWidth: 1.5,
     borderDash: [4, 3], pointRadius: 0, tension: 0.3,
     fill: false, spanGaps: true
   };
 }
 
-function makeChartCfg(data, color, isJpy) {
+function makeChartCfg(fullHistory, period, color, isJpy) {
   var isLight = document.documentElement.getAttribute('data-theme') === 'light';
   var m = isJpy ? 100 : 1;
   var dp = isJpy ? 2 : 4;
-  var chartData = data.map(function(d) { return { date: d.date, rate: parseFloat((d.rate * m).toFixed(dp)) }; });
+  var fullData = fullHistory.map(function(d) { return { date: d.date, rate: parseFloat((d.rate * m).toFixed(dp)) }; });
+  var fullRates = fullData.map(function(d) { return d.rate; });
+
+  // Compute SMA over the FULL buffered history (up to 120d), THEN slice to
+  // the display period — computing on an already-sliced window starves
+  // SMA10/20/30 of lead-in days and truncates the line at the chart's start.
+  var sma10Full = calcSma(fullRates, 10);
+  var sma20Full = calcSma(fullRates, 20);
+  var sma30Full = calcSma(fullRates, 30);
+
+  var start = fullData.length > period ? fullData.length - period : 0;
+  var chartData = fullData.slice(start);
   var rates = chartData.map(function(d) { return d.rate; });
   var labels = chartData.map(function(d) { return d.date; });
+  var sma10 = sma10Full.slice(start);
+  var sma20 = sma20Full.slice(start);
+  var sma30 = sma30Full.slice(start);
 
   return {
     type: 'line',
@@ -890,9 +902,9 @@ function makeChartCfg(data, color, isJpy) {
       labels: labels,
       datasets: [
         { data: rates, borderColor: color, borderWidth: 2, backgroundColor: color + '20', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: color, order: 0 },
-        makeSmaDataset(rates, 10, '#f59e0b'),
-        makeSmaDataset(rates, 20, '#3b82f6'),
-        makeSmaDataset(rates, 30, '#ef4444')
+        makeSmaDataset(sma10, '#f59e0b'),
+        makeSmaDataset(sma20, '#3b82f6'),
+        makeSmaDataset(sma30, '#ef4444')
       ]
     },
     options: {
@@ -937,9 +949,8 @@ function renderSingleChart(cur) {
               jpy: { data: appData.jpy, color: '#f43f5e', chart: jpyChart, isJpy: true } };
   var c = map[cur];
   var period = chartPeriods[cur];
-  var sliced = sliceHistory(c.data.history, period);
   if (c.chart) c.chart.destroy();
-  var newChart = new Chart(document.getElementById('chart-' + cur), makeChartCfg(sliced, c.color, c.isJpy));
+  var newChart = new Chart(document.getElementById('chart-' + cur), makeChartCfg(c.data.history, period, c.color, c.isJpy));
   if (cur === 'usd') usdChart = newChart;
   else if (cur === 'eur') eurChart = newChart;
   else jpyChart = newChart;
